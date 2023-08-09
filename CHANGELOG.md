@@ -1,6 +1,7 @@
 ## 0.0.2
 
 - Fix error when reconnecing the client
+- Fix last modified timestamps using the remote node id
 
 ## 0.0.1+1
 

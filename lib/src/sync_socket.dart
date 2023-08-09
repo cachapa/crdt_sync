@@ -46,31 +46,37 @@ class SyncSocket {
     required this.onChangesetSent,
     required this.verbose,
   }) {
-    _subscription =
-        socket.stream.map((e) => jsonDecode(e)).listen((message) async {
-      _log('⬇️ $message');
-      if (handshake == null) {
-        // The first message is a handshake
-        handshake = (
-          nodeId: message['node_id'] as String,
-          lastModified: Hlc.parse(message['last_modified'] as String),
-          info: message['info'] as Map<String, dynamic>?
-        );
-        _handshakeCompleter.complete(handshake);
-        onConnect?.call(handshake!.nodeId, handshake!.info);
-      } else {
-        // Merge into crdt
-        final changeset =
-            (message as Map<String, dynamic>).map((table, records) => MapEntry(
-                  table,
-                  (records as List).cast<Map<String, dynamic>>().where(
-                      (record) => validateRecord?.call(table, record) ?? true),
-                ));
-        onChangesetReceived
-            ?.call(changeset.map((key, value) => MapEntry(key, value.length)));
-        await crdt.merge(changeset);
-      }
-    }, onDone: close);
+    _subscription = socket.stream.map((e) => jsonDecode(e)).listen(
+      (message) async {
+        _log('⬇️ $message');
+        if (handshake == null) {
+          // The first message is a handshake
+          handshake = (
+            nodeId: message['node_id'] as String,
+            lastModified: Hlc.parse(message['last_modified'] as String)
+                // Modified timestamps always use the local node id
+                .apply(nodeId: crdt.nodeId),
+            info: message['info'] as Map<String, dynamic>?
+          );
+          _handshakeCompleter.complete(handshake);
+          onConnect?.call(handshake!.nodeId, handshake!.info);
+        } else {
+          // Merge into crdt
+          final changeset = (message as Map<String, dynamic>)
+              .map((table, records) => MapEntry(
+                    table,
+                    (records as List).cast<Map<String, dynamic>>().where(
+                        (record) =>
+                            validateRecord?.call(table, record) ?? true),
+                  ));
+          onChangesetReceived?.call(
+              changeset.map((key, value) => MapEntry(key, value.length)));
+          await crdt.merge(changeset);
+        }
+      },
+      onError: (e) => _log('$e'),
+      onDone: close,
+    );
   }
 
   void _send(Map<String, Object?> data) {
