@@ -36,6 +36,8 @@ class SyncSocket {
   Handshake? handshake;
   final _handshakeCompleter = Completer<Handshake>();
 
+  String? get nodeId => handshake?.nodeId;
+
   SyncSocket(
     this.crdt,
     this.socket, {

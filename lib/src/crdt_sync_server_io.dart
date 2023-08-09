@@ -17,7 +17,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   @override
   final bool verbose;
 
-  final _connections = <String, SyncSocket>{};
+  final _connections = <SyncSocket>{};
 
   @override
   int get clientCount => _connections.length;
@@ -114,12 +114,12 @@ class CrdtSyncServerIo implements CrdtSyncServer {
       socket,
       validateRecord: validateRecord,
       onConnect: (remoteNodeId, remoteInfo) {
-        _connections[remoteNodeId] = syncSocket;
+        _connections.add(syncSocket);
         onConnect?.call(remoteNodeId, remoteInfo);
       },
       onDisconnect: (remoteNodeId, code, reason) {
         localSubscription?.cancel();
-        _connections.remove(remoteNodeId);
+        _connections.remove(syncSocket);
         onDisconnect?.call(remoteNodeId, code, reason);
       },
       onChangesetReceived: onChangesetReceived,
@@ -161,7 +161,9 @@ class CrdtSyncServerIo implements CrdtSyncServer {
 
   @override
   Future<void> disconnect(String nodeId, [int? code, String? reason]) async {
-    await _connections[nodeId]?.close(code, reason);
+    await Future.wait(_connections
+        .where((e) => e.nodeId == nodeId)
+        .map((e) => e.close(code, reason)));
   }
 
   Future<Map<String, List<Map<String, Object?>>>> _getChangeset(
