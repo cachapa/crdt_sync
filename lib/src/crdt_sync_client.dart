@@ -25,7 +25,7 @@ class CrdtSyncClient {
   final OnChangeset? onChangesetSent;
   final bool verbose;
 
-  late final Set<String> _tableSet;
+  final _tableSet = <String>{};
   var _onlineMode = false;
   SyncSocket? _syncSocket;
   var _state = SocketState.disconnected;
@@ -97,7 +97,9 @@ class CrdtSyncClient {
 
     StreamSubscription? localSubscription;
     Handshake? handshake;
-    _tableSet = (tables ?? await crdt.allTables).toSet();
+    _tableSet
+      ..clear()
+      ..addAll(tables ?? await crdt.allTables);
 
     try {
       final socket = WebSocketChannel.connect(uri);
