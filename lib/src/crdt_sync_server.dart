@@ -12,6 +12,8 @@ typedef ServerHandshakeDataBuilder = Map<String, dynamic>? Function(
     String remoteNodeId, Map<String, dynamic>? remoteData);
 typedef OnConnection = void Function(dynamic request);
 
+const defaultPingInterval = Duration(seconds: 20);
+
 abstract class CrdtSyncServer {
   SqlCrdt get crdt;
 
@@ -29,6 +31,12 @@ abstract class CrdtSyncServer {
 
   /// Opens an HTTP socket and starts listening for incoming connections on the
   /// specified [port].
+  ///
+  /// [pingInterval] defines the WebSocket heartbeat frequency and allows the
+  /// server to identify and release stale connections. This is highly
+  /// recommended since stale connections keep database subscriptions which
+  /// cause queries to be run on every change, leading to performance issues.
+  /// Defaults to 20 seconds, set to [null] to disable.
   ///
   /// Use [handshakeDataBuilder] if you need to send connection metadata on the
   /// first frame. This can be useful to send server identifiers, or
@@ -58,6 +66,7 @@ abstract class CrdtSyncServer {
   /// inefficiencies.
   Future<void> listen(
     int port, {
+    Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     Iterable<String>? tables,
     QueryBuilder? queryBuilder,
@@ -75,6 +84,7 @@ abstract class CrdtSyncServer {
   /// See [listen] for a description of the remaining parameters.
   Future<void> handleRequest(
     dynamic request, {
+    Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     Iterable<String>? tables,
     QueryBuilder? queryBuilder,
@@ -88,6 +98,11 @@ abstract class CrdtSyncServer {
 
   /// Takes an established [WebSocket] connection to start synchronizing with a
   /// [CrdtSyncClient].
+  ///
+  /// It's recommended that the incoming [socket] has a ping interval set to
+  /// avoid accumulating stale connections. This can be done in the parent
+  /// server framework, e.g. setting [pingInterval] in shelf_web_socket's
+  /// [webSocketHandler].
   ///
   /// See [listen] for a description of the remaining parameters.
   Future<void> handle(

@@ -30,6 +30,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   @override
   Future<void> listen(
     int port, {
+    Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     Iterable<String>? tables,
     QueryBuilder? queryBuilder,
@@ -46,6 +47,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
     await for (HttpRequest request in server) {
       await handleRequest(
         request,
+        pingInterval: pingInterval,
         handshakeDataBuilder: handshakeDataBuilder,
         tables: tables,
         queryBuilder: queryBuilder,
@@ -62,6 +64,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   @override
   Future<void> handleRequest(
     dynamic request, {
+    Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     Iterable<String>? tables,
     QueryBuilder? queryBuilder,
@@ -76,7 +79,8 @@ class CrdtSyncServerIo implements CrdtSyncServer {
 
     onConnecting?.call(request);
     final socket =
-        IOWebSocketChannel(await WebSocketTransformer.upgrade(request));
+        IOWebSocketChannel(await WebSocketTransformer.upgrade(request)
+          ..pingInterval = pingInterval);
     await handle(
       socket,
       handshakeDataBuilder: handshakeDataBuilder,
