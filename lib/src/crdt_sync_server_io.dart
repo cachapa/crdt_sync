@@ -140,11 +140,13 @@ class CrdtSyncServerIo implements CrdtSyncServer {
 
       // Monitor for changes and send them immediately
       var lastUpdate = crdt.canonicalTime;
-      localSubscription = crdt.onTablesChanged.asyncMap((e) async {
-        // Filter out unspecified tables
-        final allowedTables = tableSet.intersection(e.tables.toSet());
-        final changeset = await _getChangeset(
-            queryBuilder, allowedTables, lastUpdate, hs.nodeId);
+      localSubscription = crdt.onTablesChanged
+          // Filter out unspecified tables
+          .map((e) =>
+              (hlc: e.hlc, tables: tableSet.intersection(e.tables.toSet())))
+          .asyncMap((e) async {
+        final changeset =
+            await _getChangeset(queryBuilder, e.tables, lastUpdate, hs.nodeId);
         lastUpdate = e.hlc;
         return changeset;
       }).listen(syncSocket.sendChangeset);
