@@ -1,3 +1,7 @@
+## 0.0.3
+
+- Add remote nodeId to connection callbacks
+
 ## 0.0.2
 
 - Fix error when reconnecting the client

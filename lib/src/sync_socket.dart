@@ -15,11 +15,10 @@ typedef QueryBuilder = (String query, List<Object?> args)? Function(
 
 typedef RecordValidator = bool Function(
     String table, Map<String, dynamic> record);
-typedef OnConnect = void Function(
-    String remoteNodeId, Map<String, dynamic>? remoteInfo);
-typedef OnDisconnect = void Function(
-    String remoteNodeId, int? code, String? reason);
-typedef OnChangeset = void Function(Map<String, int> recordCounts);
+typedef OnConnect = void Function(String nodeId, Map<String, dynamic>? data);
+typedef OnDisconnect = void Function(String nodeId, int? code, String? reason);
+typedef OnChangeset = void Function(
+    String nodeId, Map<String, int> recordCounts);
 
 class SyncSocket {
   final SqlCrdt crdt;
@@ -71,7 +70,7 @@ class SyncSocket {
                         (record) =>
                             validateRecord?.call(table, record) ?? true),
                   ));
-          onChangesetReceived?.call(
+          onChangesetReceived?.call(nodeId!,
               changeset.map((key, value) => MapEntry(key, value.length)));
           await crdt.merge(changeset);
         }
@@ -96,8 +95,8 @@ class SyncSocket {
 
   void sendChangeset(Map<String, List<Map<String, Object?>>> changeset) {
     if (changeset.isEmpty) return;
-    onChangesetSent
-        ?.call(changeset.map((key, value) => MapEntry(key, value.length)));
+    onChangesetSent?.call(
+        nodeId!, changeset.map((key, value) => MapEntry(key, value.length)));
     _send(changeset);
   }
 
