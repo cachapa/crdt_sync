@@ -1,6 +1,7 @@
 ## 0.0.3
 
 - Add remote nodeId to connection callbacks
+- Improve changeset generation strategy
 
 ## 0.0.2
 

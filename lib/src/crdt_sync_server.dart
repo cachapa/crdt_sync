@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:crdt_sync/crdt_sync.dart';
-import 'package:crdt_sync/src/sync_socket.dart';
 import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../crdt_sync.dart';
 import 'crdt_sync_server_locator.dart'
     if (dart.library.io) 'crdt_sync_server_io.dart';
+import 'sync_socket.dart';
 
 typedef ServerHandshakeDataBuilder = Map<String, dynamic>? Function(
     String remoteNodeId, Map<String, dynamic>? remoteData);
@@ -68,8 +68,7 @@ abstract class CrdtSyncServer {
     int port, {
     Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnection? onConnecting,
     OnConnect? onConnect,
@@ -86,8 +85,7 @@ abstract class CrdtSyncServer {
     dynamic request, {
     Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnection? onConnecting,
     OnConnect? onConnect,
@@ -108,8 +106,7 @@ abstract class CrdtSyncServer {
   Future<void> handle(
     WebSocketChannel socket, {
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,

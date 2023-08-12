@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crdt_sync/src/sync_socket.dart';
 import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'crdt_sync_server.dart';
+import 'sql_util.dart';
+import 'sync_socket.dart';
 
 CrdtSyncServer getPlatformCrdtSyncServer(SqlCrdt crdt, bool verbose) =>
     CrdtSyncServerIo(crdt, verbose: verbose);
@@ -32,8 +33,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
     int port, {
     Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnection? onConnecting,
     OnConnect? onConnect,
@@ -49,8 +49,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
         request,
         pingInterval: pingInterval,
         handshakeDataBuilder: handshakeDataBuilder,
-        tables: tables,
-        queryBuilder: queryBuilder,
+        changesetQueries: changesetQueries,
         validateRecord: validateRecord,
         onConnecting: onConnecting,
         onConnect: onConnect,
@@ -66,8 +65,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
     dynamic request, {
     Duration? pingInterval = defaultPingInterval,
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnection? onConnecting,
     OnConnect? onConnect,
@@ -84,8 +82,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
     await handle(
       socket,
       handshakeDataBuilder: handshakeDataBuilder,
-      tables: tables,
-      queryBuilder: queryBuilder,
+      changesetQueries: changesetQueries,
       validateRecord: validateRecord,
       onConnect: onConnect,
       onChangesetReceived: onChangesetReceived,
@@ -98,8 +95,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   Future<void> handle(
     WebSocketChannel socket, {
     ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Iterable<String>? tables,
-    QueryBuilder? queryBuilder,
+    Map<String, Query>? changesetQueries,
     RecordValidator? validateRecord,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
@@ -127,7 +123,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
       verbose: verbose,
     );
 
-    final tableSet = (tables ?? await crdt.allTables).toSet();
+    final tableSet = (changesetQueries?.keys ?? await crdt.allTables).toSet();
 
     try {
       // A good client always introduces itself first
@@ -139,22 +135,20 @@ class CrdtSyncServerIo implements CrdtSyncServer {
       );
 
       // Monitor for changes and send them immediately
-      var lastUpdate = crdt.canonicalTime;
       localSubscription = crdt.onTablesChanged
           // Filter out unspecified tables
           .map((e) =>
               (hlc: e.hlc, tables: tableSet.intersection(e.tables.toSet())))
-          .asyncMap((e) async {
-        final changeset =
-            await _getChangeset(queryBuilder, e.tables, lastUpdate, hs.nodeId);
-        lastUpdate = e.hlc;
-        return changeset;
-      }).listen(syncSocket.sendChangeset);
+          .where((e) => e.tables.isNotEmpty)
+          .asyncMap((e) =>
+              _getChangeset(changesetQueries, e.tables, e.hlc, hs.nodeId))
+          .listen(syncSocket.sendChangeset);
 
       // Send changeset since last sync.
       // This is done after monitoring to prevent losing changes that happen
       // exactly between both calls.
-      await _getChangeset(queryBuilder, tableSet, hs.lastModified, hs.nodeId)
+      await _getChangeset(
+              changesetQueries, tableSet, hs.lastModified, hs.nodeId, true)
           .then(syncSocket.sendChangeset);
     } catch (e) {
       _log('$e');
@@ -169,27 +163,35 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   }
 
   Future<Map<String, List<Map<String, Object?>>>> _getChangeset(
-    QueryBuilder? queryBuilder,
-    Iterable<String> tables,
-    Hlc hlc,
-    String remoteNodeId,
-  ) async =>
+          Map<String, Query>? changesetQueries,
+          Iterable<String> tables,
+          Hlc hlc,
+          String remoteNodeId,
+          [bool afterHlc = false]) async =>
       {
         for (final table in tables)
-          table:
-              await _getTableChangeset(queryBuilder, table, hlc, remoteNodeId),
+          table: await _getTableChangeset(
+              changesetQueries, table, hlc, remoteNodeId, afterHlc),
       }..removeWhere((_, records) => records.isEmpty);
 
   Future<List<Map<String, Object?>>> _getTableChangeset(
-      QueryBuilder? queryBuilder, String table, Hlc hlc, String remoteNodeId) {
-    final (sql, args) = queryBuilder?.call(table, hlc, remoteNodeId) ??
-        (
-          'SELECT * FROM $table '
-              'WHERE node_id != ?1 '
-              'AND modified > ?2',
-          [remoteNodeId, hlc]
-        );
-    return crdt.query(sql, args);
+    Map<String, Query>? changesetQueries,
+    String table,
+    Hlc hlc,
+    String remoteNodeId,
+    bool afterHlc,
+  ) {
+    final (sql, args) =
+        changesetQueries?[table] ?? ('SELECT * FROM $table', []);
+    return crdt.query(
+      SqlUtil.addChangesetClauses(
+        sql,
+        exceptNodeId: remoteNodeId,
+        onHlc: afterHlc ? null : hlc,
+        afterHlc: afterHlc ? hlc : null,
+      ),
+      args,
+    );
   }
 
   void _log(String msg) {

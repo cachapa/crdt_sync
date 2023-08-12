@@ -10,8 +10,7 @@ typedef Handshake = ({
   Map<String, dynamic>? info,
 });
 
-typedef QueryBuilder = (String query, List<Object?> args)? Function(
-    String table, Hlc lastModified, String remoteNodeId);
+typedef Query = (String sql, List<Object?> args);
 
 typedef RecordValidator = bool Function(
     String table, Map<String, dynamic> record);

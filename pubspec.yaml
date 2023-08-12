@@ -9,6 +9,7 @@ environment:
 dependencies:
   sql_crdt: ^1.1.1
 #    path: ../sql_crdt
+  sqlparser: ^0.30.3
   web_socket_channel: ^2.4.0
 
 dev_dependencies:

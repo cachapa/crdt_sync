@@ -1,8 +1,10 @@
 import 'dart:async';
 
-import 'package:crdt_sync/src/sync_socket.dart';
 import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'sql_util.dart';
+import 'sync_socket.dart';
 
 enum SocketState { disconnected, connecting, connected }
 
@@ -15,8 +17,7 @@ class CrdtSyncClient {
   final SqlCrdt crdt;
   final Uri uri;
   final ClientHandshakeDataBuilder? handshakeDataBuilder;
-  final Iterable<String>? tables;
-  final QueryBuilder? queryBuilder;
+  final Map<String, Query>? changesetQueries;
   final RecordValidator? validateRecord;
   final OnConnecting? onConnecting;
   final OnConnect? onConnect;
@@ -73,8 +74,7 @@ class CrdtSyncClient {
     this.crdt,
     this.uri, {
     this.handshakeDataBuilder,
-    this.tables,
-    this.queryBuilder,
+    this.changesetQueries,
     this.validateRecord,
     this.onConnecting,
     this.onConnect,
@@ -83,7 +83,7 @@ class CrdtSyncClient {
     this.onChangesetSent,
     this.verbose = false,
   })  : assert({'ws', 'wss'}.contains(uri.scheme)),
-        assert(tables == null || tables.isNotEmpty);
+        assert(changesetQueries == null || changesetQueries.isNotEmpty);
 
   /// Start trying to connect to [uri].
   /// The client will try to connect every 10 seconds until it succeeds.
@@ -99,7 +99,7 @@ class CrdtSyncClient {
     Handshake? handshake;
     _tableSet
       ..clear()
-      ..addAll(tables ?? await crdt.allTables);
+      ..addAll(changesetQueries?.keys ?? await crdt.allTables);
 
     try {
       final socket = WebSocketChannel.connect(uri);
@@ -131,19 +131,18 @@ class CrdtSyncClient {
       handshake = await _syncSocket!.awaitHandshake();
 
       // Monitor for changes and send them immediately
-      var lastUpdate = crdt.canonicalTime;
-      localSubscription = crdt.onTablesChanged.asyncMap((e) async {
-        // Filter out unexpected tables
-        final allowedTables = _tableSet.intersection(e.tables.toSet());
-        final changeset = await _getChangeset(allowedTables, lastUpdate);
-        lastUpdate = e.hlc;
-        return changeset;
-      }).listen(_syncSocket!.sendChangeset);
+      localSubscription = crdt.onTablesChanged
+          // Filter out unspecified tables
+          .map((e) =>
+              (hlc: e.hlc, tables: _tableSet.intersection(e.tables.toSet())))
+          .where((e) => e.tables.isNotEmpty)
+          .asyncMap((e) => _getChangeset(e.tables, e.hlc))
+          .listen(_syncSocket!.sendChangeset);
 
       // Send changeset since last sync.
       // This is done after monitoring to prevent losing changes that happen
       // exactly between both calls.
-      await _getChangeset(_tableSet, handshake.lastModified)
+      await _getChangeset(_tableSet, handshake.lastModified, true)
           .then(_syncSocket!.sendChangeset);
     } catch (e) {
       _log('$e');
@@ -159,6 +158,7 @@ class CrdtSyncClient {
     _reconnectTimer?.cancel();
 
     await _syncSocket?.close(code, reason);
+    _setState(SocketState.disconnected);
   }
 
   void _maybeReconnect() {
@@ -169,20 +169,26 @@ class CrdtSyncClient {
   }
 
   Future<Map<String, List<Map<String, Object?>>>> _getChangeset(
-          Iterable<String> tables, Hlc hlc) async =>
+          Iterable<String> tables, Hlc hlc,
+          [bool afterHlc = false]) async =>
       {
-        for (final table in tables) table: await _getTableChangeset(table, hlc),
+        for (final table in tables)
+          table: await _getTableChangeset(table, hlc, afterHlc),
       }..removeWhere((_, records) => records.isEmpty);
 
-  Future<List<Map<String, Object?>>> _getTableChangeset(String table, Hlc hlc) {
-    final (sql, args) = queryBuilder?.call(table, hlc, crdt.nodeId) ??
-        (
-          'SELECT * FROM $table '
-              'WHERE node_id = ?1 '
-              'AND modified > ?2',
-          [crdt.nodeId, hlc]
-        );
-    return crdt.query(sql, args);
+  Future<List<Map<String, Object?>>> _getTableChangeset(
+      String table, Hlc hlc, bool afterHlc) {
+    final (sql, args) =
+        changesetQueries?[table] ?? ('SELECT * FROM $table ', []);
+    return crdt.query(
+      SqlUtil.addChangesetClauses(
+        sql,
+        onlyNodeId: crdt.nodeId,
+        onHlc: afterHlc ? null : hlc,
+        afterHlc: afterHlc ? hlc : null,
+      ),
+      args,
+    );
   }
 
   void _setState(SocketState state) {
