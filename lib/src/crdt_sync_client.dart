@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -6,12 +7,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'sql_util.dart';
 import 'sync_socket.dart';
 
+const _minDelay = 2; // In seconds. Minimum is 2 since 1² = 1.
+const _maxDelay = 10;
+
 enum SocketState { disconnected, connecting, connected }
 
 typedef ClientHandshakeDataBuilder = Map<String, dynamic>? Function();
 typedef OnConnecting = void Function();
-
-const _reconnectDuration = Duration(seconds: 10);
 
 class CrdtSyncClient {
   final SqlCrdt crdt;
@@ -32,6 +34,7 @@ class CrdtSyncClient {
   var _state = SocketState.disconnected;
   final _stateController = StreamController<SocketState>.broadcast();
 
+  var _reconnectDelay = _minDelay; // in seconds
   Timer? _reconnectTimer;
 
   /// Get the current socket state.
@@ -109,6 +112,7 @@ class CrdtSyncClient {
         socket,
         validateRecord: validateRecord,
         onConnect: (remoteNodeId, remoteInfo) {
+          _reconnectDelay = _minDelay;
           _setState(SocketState.connected);
           onConnect?.call(remoteNodeId, remoteInfo);
         },
@@ -156,6 +160,7 @@ class CrdtSyncClient {
     if (!_onlineMode) return;
     _onlineMode = false;
     _reconnectTimer?.cancel();
+    _reconnectDelay = _minDelay;
 
     await _syncSocket?.close(code, reason);
     _setState(SocketState.disconnected);
@@ -163,8 +168,10 @@ class CrdtSyncClient {
 
   void _maybeReconnect() {
     if (_onlineMode) {
-      _reconnectTimer = Timer(_reconnectDuration, () => connect());
-      _log('Reconnecting in ${_reconnectDuration.inSeconds}s…');
+      _reconnectTimer =
+          Timer(Duration(seconds: _reconnectDelay), () => connect());
+      _log('Reconnecting in ${_reconnectDelay}s…');
+      _reconnectDelay = min(_reconnectDelay * 2, _maxDelay);
     }
   }
 

@@ -2,6 +2,7 @@
 
 - Add remote nodeId to connection callbacks
 - Improve changeset generation strategy
+- Implement exponential backoff when reconnecting to server
 
 ## 0.0.2
 
