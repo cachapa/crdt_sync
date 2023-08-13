@@ -185,6 +185,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
         changesetQueries?[table] ?? ('SELECT * FROM $table', []);
     return crdt.query(
       SqlUtil.addChangesetClauses(
+        table,
         sql,
         exceptNodeId: remoteNodeId,
         onHlc: afterHlc ? null : hlc,

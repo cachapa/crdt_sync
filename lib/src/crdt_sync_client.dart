@@ -182,6 +182,7 @@ class CrdtSyncClient {
         changesetQueries?[table] ?? ('SELECT * FROM $table ', []);
     return crdt.query(
       SqlUtil.addChangesetClauses(
+        table,
         sql,
         onlyNodeId: crdt.nodeId,
         onHlc: afterHlc ? null : hlc,

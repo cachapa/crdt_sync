@@ -12,6 +12,7 @@ class SqlUtil {
   SqlUtil._();
 
   static String addChangesetClauses(
+    String table,
     String sql, {
     String? onlyNodeId,
     String? exceptNodeId,
@@ -21,11 +22,13 @@ class SqlUtil {
     final statement = _parser.parse(sql).rootNode as SelectStatement;
 
     final nodeIdClause = onlyNodeId != null
-        ? _createClause('node_id', TokenType.equal, onlyNodeId)
-        : _createClause('node_id', TokenType.exclamationEqual, exceptNodeId!);
+        ? _createClause(table, 'node_id', TokenType.equal, onlyNodeId)
+        : _createClause(
+            table, 'node_id', TokenType.exclamationEqual, exceptNodeId!);
     final modifiedClause = onHlc != null
-        ? _createClause('modified', TokenType.equal, onHlc.toString())
-        : _createClause('modified', TokenType.more, afterHlc!.toString());
+        ? _createClause(table, 'modified', TokenType.equal, onHlc.toString())
+        : _createClause(
+            table, 'modified', TokenType.more, afterHlc!.toString());
     final clauses = _joinClauses(nodeIdClause, modifiedClause);
 
     statement.where = statement.where != null
@@ -35,9 +38,9 @@ class SqlUtil {
   }
 
   static BinaryExpression _createClause(
-          String column, TokenType operator, String value) =>
+          String table, String column, TokenType operator, String value) =>
       BinaryExpression(
-        Reference(columnName: column),
+        Reference(entityName: table, columnName: column),
         Token(operator, _span),
         StringLiteral(value),
       );

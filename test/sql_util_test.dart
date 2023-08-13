@@ -5,19 +5,18 @@ import 'package:test/test.dart';
 void main() {
   group('Alter query', () {
     test('Simple query', () {
-      final sql = SqlUtil.addChangesetClauses('SELECT * FROM test',
+      final sql = SqlUtil.addChangesetClauses('test', 'SELECT * FROM test',
           exceptNodeId: 'node_id', afterHlc: Hlc.zero('node_id'));
       expect(sql,
-          "SELECT * FROM test WHERE node_id != 'node_id' AND modified > '1970-01-01T00:00:00.000Z-0000-node_id'");
+          "SELECT * FROM test WHERE test.node_id != 'node_id' AND test.modified > '1970-01-01T00:00:00.000Z-0000-node_id'");
     });
 
     test('Simple query with where clause', () {
       final sql = SqlUtil.addChangesetClauses(
-          'SELECT * FROM test WHERE a != ?1 and b = ?2',
-          exceptNodeId: 'node_id',
-          afterHlc: Hlc.zero('node_id'));
+          'test', 'SELECT * FROM test WHERE a != ?1 and b = ?2',
+          exceptNodeId: 'node_id', afterHlc: Hlc.zero('node_id'));
       expect(sql,
-          "SELECT * FROM test WHERE node_id != 'node_id' AND modified > '1970-01-01T00:00:00.000Z-0000-node_id' AND a != ?1 AND b = ?2");
+          "SELECT * FROM test WHERE test.node_id != 'node_id' AND test.modified > '1970-01-01T00:00:00.000Z-0000-node_id' AND a != ?1 AND b = ?2");
     });
   });
 }
