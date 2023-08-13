@@ -7,6 +7,7 @@ environment:
   sdk: ^3.0.0
 
 dependencies:
+  source_span: ^1.10.0
   sql_crdt: ^1.1.1
 #    path: ../sql_crdt
   sqlparser: ^0.30.3
