@@ -16,7 +16,7 @@ class SqlUtil {
     String sql, {
     String? onlyNodeId,
     String? exceptNodeId,
-    Hlc? onHlc,
+    Hlc? atHlc,
     Hlc? afterHlc,
   }) {
     final statement = _parser.parse(sql).rootNode as SelectStatement;
@@ -25,8 +25,8 @@ class SqlUtil {
         ? _createClause(table, 'node_id', TokenType.equal, onlyNodeId)
         : _createClause(
             table, 'node_id', TokenType.exclamationEqual, exceptNodeId!);
-    final modifiedClause = onHlc != null
-        ? _createClause(table, 'modified', TokenType.equal, onHlc.toString())
+    final modifiedClause = atHlc != null
+        ? _createClause(table, 'modified', TokenType.equal, atHlc.toString())
         : _createClause(
             table, 'modified', TokenType.more, afterHlc!.toString());
     final clauses = _joinClauses(nodeIdClause, modifiedClause);
@@ -40,7 +40,7 @@ class SqlUtil {
   static BinaryExpression _createClause(
           String table, String column, TokenType operator, String value) =>
       BinaryExpression(
-        Reference(entityName: table, columnName: column),
+        Reference(columnName: column),
         Token(operator, _span),
         StringLiteral(value),
       );

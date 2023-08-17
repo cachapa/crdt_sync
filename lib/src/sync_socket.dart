@@ -7,71 +7,47 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 typedef Handshake = ({
   String nodeId,
   Hlc lastModified,
-  Map<String, dynamic>? info,
+  Map<String, dynamic>? data,
 });
 
-typedef Query = (String sql, List<Object?> args);
-
-typedef RecordValidator = bool Function(
-    String table, Map<String, dynamic> record);
-typedef OnConnect = void Function(String nodeId, Map<String, dynamic>? data);
-typedef OnDisconnect = void Function(String nodeId, int? code, String? reason);
-typedef OnChangeset = void Function(
-    String nodeId, Map<String, int> recordCounts);
+typedef HandshakeDataBuilder = Object? Function(
+    String? peerId, Map<String, dynamic>? peerData);
 
 class SyncSocket {
-  final SqlCrdt crdt;
   final WebSocketChannel socket;
-  final RecordValidator? validateRecord;
-  final OnConnect? onConnect;
-  final OnDisconnect onDisconnect;
-  final OnChangeset? onChangesetReceived;
-  final OnChangeset? onChangesetSent;
+  final void Function(int? code, String? reason) onDisconnect;
+  final void Function(CrdtChangeset changeset) onChangeset;
   final bool verbose;
 
   late final StreamSubscription _subscription;
 
-  Handshake? handshake;
   final _handshakeCompleter = Completer<Handshake>();
 
-  String? get nodeId => handshake?.nodeId;
-
   SyncSocket(
-    this.crdt,
-    this.socket, {
-    required this.validateRecord,
-    required this.onConnect,
+    this.socket,
+    String localNodeId, {
     required this.onDisconnect,
-    required this.onChangesetReceived,
-    required this.onChangesetSent,
+    required this.onChangeset,
     required this.verbose,
   }) {
     _subscription = socket.stream.map((e) => jsonDecode(e)).listen(
       (message) async {
         _log('⬇️ $message');
-        if (handshake == null) {
+        if (!_handshakeCompleter.isCompleted) {
           // The first message is a handshake
-          handshake = (
+          _handshakeCompleter.complete((
             nodeId: message['node_id'] as String,
             lastModified: Hlc.parse(message['last_modified'] as String)
                 // Modified timestamps always use the local node id
-                .apply(nodeId: crdt.nodeId),
-            info: message['info'] as Map<String, dynamic>?
-          );
-          _handshakeCompleter.complete(handshake);
-          onConnect?.call(handshake!.nodeId, handshake!.info);
+                .apply(nodeId: localNodeId),
+            data: message['data'] as Map<String, dynamic>?
+          ));
         } else {
           // Merge into crdt
-          final changeset = (message as Map<String, dynamic>)
-              .map((table, records) => MapEntry(
-                    table,
-                    (records as List).cast<Map<String, dynamic>>().where(
-                        (record) =>
-                            validateRecord?.call(table, record) ?? true),
-                  ));
-          onChangesetReceived?.call(nodeId!,
-              changeset.map((key, value) => MapEntry(key, value.length)));
-          await crdt.merge(changeset);
+          final changeset = (message as Map<String, dynamic>).map((table,
+                  records) =>
+              MapEntry(table, (records as List).cast<Map<String, dynamic>>()));
+          onChangeset(changeset);
         }
       },
       onError: (e) => _log('$e'),
@@ -84,20 +60,15 @@ class SyncSocket {
     socket.sink.add(jsonEncode(data));
   }
 
-  Future<Handshake> awaitHandshake() => _handshakeCompleter.future;
+  Future<Handshake> receiveHandshake() => _handshakeCompleter.future;
 
-  void sendHandshake(Hlc lastModified, dynamic info) => _send({
-        'node_id': crdt.nodeId,
+  void sendHandshake(String nodeId, Hlc lastModified, Object? data) => _send({
+        'node_id': nodeId,
         'last_modified': lastModified,
-        'info': info,
+        'data': data,
       });
 
-  void sendChangeset(Map<String, List<Map<String, Object?>>> changeset) {
-    if (changeset.isEmpty) return;
-    onChangesetSent?.call(
-        nodeId!, changeset.map((key, value) => MapEntry(key, value.length)));
-    _send(changeset);
-  }
+  void sendChangeset(CrdtChangeset changeset) => _send(changeset);
 
   Future<void> close([int? code, String? reason]) async {
     await Future.wait([
@@ -105,11 +76,7 @@ class SyncSocket {
       socket.sink.close(code, reason),
     ]);
 
-    // Notify only when the connection was fully established (w/ handshake)
-    if (handshake != null) {
-      onDisconnect.call(
-          handshake!.nodeId, socket.closeCode, socket.closeReason);
-    }
+    onDisconnect(socket.closeCode, socket.closeReason);
   }
 
   void _log(String msg) {

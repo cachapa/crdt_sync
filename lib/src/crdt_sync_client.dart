@@ -4,10 +4,9 @@ import 'dart:math';
 import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'sql_util.dart';
-import 'sync_socket.dart';
+import 'crdt_sync.dart';
 
-const _minDelay = 2; // In seconds. Minimum is 2 since 1² = 1.
+const _minDelay = 2; // In seconds. Minimum is 2 because 1² = 1.
 const _maxDelay = 10;
 
 enum SocketState { disconnected, connecting, connected }
@@ -28,9 +27,9 @@ class CrdtSyncClient {
   final OnChangeset? onChangesetSent;
   final bool verbose;
 
-  final _tableSet = <String>{};
+  CrdtSync? _crdtSync;
+
   var _onlineMode = false;
-  SyncSocket? _syncSocket;
   var _state = SocketState.disconnected;
   final _stateController = StreamController<SocketState>.broadcast();
 
@@ -98,18 +97,15 @@ class CrdtSyncClient {
     _setState(SocketState.connecting);
     onConnecting?.call();
 
-    StreamSubscription? localSubscription;
-    Handshake? handshake;
-    _tableSet
-      ..clear()
-      ..addAll(changesetQueries?.keys ?? await crdt.allTables);
-
     try {
       final socket = WebSocketChannel.connect(uri);
       await socket.ready;
-      _syncSocket = SyncSocket(
+      _crdtSync = CrdtSync(
         crdt,
         socket,
+        isClient: true,
+        handshakeDataBuilder: (_, __) => handshakeDataBuilder?.call(),
+        changesetQueries: changesetQueries,
         validateRecord: validateRecord,
         onConnect: (remoteNodeId, remoteInfo) {
           _reconnectDelay = _minDelay;
@@ -119,35 +115,13 @@ class CrdtSyncClient {
         onChangesetReceived: onChangesetReceived,
         onChangesetSent: onChangesetSent,
         onDisconnect: (remoteNodeId, code, reason) {
-          localSubscription?.cancel();
           _setState(SocketState.disconnected);
           onDisconnect?.call(remoteNodeId, code, reason);
-          _syncSocket = null;
+          _crdtSync = null;
           _maybeReconnect();
         },
         verbose: verbose,
       );
-
-      // Introduce ourselves
-      _syncSocket!.sendHandshake(
-          await crdt.lastModified(excludeNodeId: crdt.nodeId),
-          handshakeDataBuilder?.call());
-      handshake = await _syncSocket!.awaitHandshake();
-
-      // Monitor for changes and send them immediately
-      localSubscription = crdt.onTablesChanged
-          // Filter out unspecified tables
-          .map((e) =>
-              (hlc: e.hlc, tables: _tableSet.intersection(e.tables.toSet())))
-          .where((e) => e.tables.isNotEmpty)
-          .asyncMap((e) => _getChangeset(e.tables, e.hlc))
-          .listen(_syncSocket!.sendChangeset);
-
-      // Send changeset since last sync.
-      // This is done after monitoring to prevent losing changes that happen
-      // exactly between both calls.
-      await _getChangeset(_tableSet, handshake.lastModified, true)
-          .then(_syncSocket!.sendChangeset);
     } catch (e) {
       _log('$e');
       _setState(SocketState.disconnected);
@@ -162,7 +136,7 @@ class CrdtSyncClient {
     _reconnectTimer?.cancel();
     _reconnectDelay = _minDelay;
 
-    await _syncSocket?.close(code, reason);
+    await _crdtSync?.close(code, reason);
     _setState(SocketState.disconnected);
   }
 
@@ -173,30 +147,6 @@ class CrdtSyncClient {
       _log('Reconnecting in ${_reconnectDelay}s…');
       _reconnectDelay = min(_reconnectDelay * 2, _maxDelay);
     }
-  }
-
-  Future<Map<String, List<Map<String, Object?>>>> _getChangeset(
-          Iterable<String> tables, Hlc hlc,
-          [bool afterHlc = false]) async =>
-      {
-        for (final table in tables)
-          table: await _getTableChangeset(table, hlc, afterHlc),
-      }..removeWhere((_, records) => records.isEmpty);
-
-  Future<List<Map<String, Object?>>> _getTableChangeset(
-      String table, Hlc hlc, bool afterHlc) {
-    final (sql, args) =
-        changesetQueries?[table] ?? ('SELECT * FROM $table ', []);
-    return crdt.query(
-      SqlUtil.addChangesetClauses(
-        table,
-        sql,
-        onlyNodeId: crdt.nodeId,
-        onHlc: afterHlc ? null : hlc,
-        afterHlc: afterHlc ? hlc : null,
-      ),
-      args,
-    );
   }
 
   void _setState(SocketState state) {

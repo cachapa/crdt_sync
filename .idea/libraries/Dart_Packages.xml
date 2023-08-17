@@ -292,7 +292,7 @@
         <entry key="sql_crdt">
           <value>
             <list>
-              <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/sql_crdt-1.1.1/lib" />
+              <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/sql_crdt-1.1.1+1/lib" />
             </list>
           </value>
         </entry>
@@ -306,7 +306,7 @@
         <entry key="sqlite_crdt">
           <value>
             <list>
-              <option value="$USER_HOME$/.pub-cache/hosted/pub.dev/sqlite_crdt-1.1.1/lib" />
+              <option value="$PROJECT_DIR$/../sqlite_crdt/lib" />
             </list>
           </value>
         </entry>
@@ -466,9 +466,8 @@
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqflite_common-2.5.0/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqflite_common_ffi-2.3.0+2/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqflite_common_ffi_web-0.4.0/lib" />
-      <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sql_crdt-1.1.1/lib" />
+      <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sql_crdt-1.1.1+1/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqlite3-2.1.0/lib" />
-      <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqlite_crdt-1.1.1/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/sqlparser-0.30.3/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/stack_trace-1.11.1/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/stream_channel-2.1.2/lib" />
@@ -485,6 +484,7 @@
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/web_socket_channel-2.4.0/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/webkit_inspection_protocol-1.2.0/lib" />
       <root url="file://$USER_HOME$/.pub-cache/hosted/pub.dev/yaml-3.1.2/lib" />
+      <root url="file://$PROJECT_DIR$/../sqlite_crdt/lib" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

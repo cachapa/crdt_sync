@@ -6,10 +6,9 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../crdt_sync.dart';
 import 'crdt_sync_server_locator.dart'
     if (dart.library.io) 'crdt_sync_server_io.dart';
-import 'sync_socket.dart';
 
-typedef ServerHandshakeDataBuilder = Map<String, dynamic>? Function(
-    String remoteNodeId, Map<String, dynamic>? remoteData);
+typedef ServerHandshakeDataBuilder = Object? Function(
+    String peerId, Object? peerData);
 typedef OnConnection = void Function(dynamic request);
 
 const defaultPingInterval = Duration(seconds: 20);
@@ -26,8 +25,28 @@ abstract class CrdtSyncServer {
   /// client and vice-versa.
   ///
   /// Set [verbose] to true to spam your output with raw payloads.
-  factory CrdtSyncServer(SqlCrdt crdt, {bool verbose = false}) =>
-      getPlatformCrdtSyncServer(crdt, verbose);
+  factory CrdtSyncServer(
+    SqlCrdt crdt, {
+    ServerHandshakeDataBuilder? handshakeDataBuilder,
+    Map<String, Query>? changesetQueries,
+    RecordValidator? validateRecord,
+    OnConnect? onConnect,
+    OnDisconnect? onDisconnect,
+    OnChangeset? onChangesetReceived,
+    OnChangeset? onChangesetSent,
+    bool verbose = false,
+  }) =>
+      getPlatformCrdtSyncServer(
+        crdt,
+        handshakeDataBuilder,
+        changesetQueries,
+        validateRecord,
+        onConnect,
+        onDisconnect,
+        onChangesetReceived,
+        onChangesetSent,
+        verbose,
+      );
 
   /// Opens an HTTP socket and starts listening for incoming connections on the
   /// specified [port].
@@ -67,14 +86,7 @@ abstract class CrdtSyncServer {
   Future<void> listen(
     int port, {
     Duration? pingInterval = defaultPingInterval,
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
     OnConnection? onConnecting,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
   });
 
   /// Takes an incoming [HttpRequest] and attempts to upgrade it to a
@@ -84,14 +96,7 @@ abstract class CrdtSyncServer {
   Future<void> handleRequest(
     dynamic request, {
     Duration? pingInterval = defaultPingInterval,
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
     OnConnection? onConnecting,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
   });
 
   /// Takes an established [WebSocket] connection to start synchronizing with a
@@ -103,16 +108,7 @@ abstract class CrdtSyncServer {
   /// [webSocketHandler].
   ///
   /// See [listen] for a description of the remaining parameters.
-  Future<void> handle(
-    WebSocketChannel socket, {
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
-  });
+  void handle(WebSocketChannel socket);
 
   /// Forcefully disconnect a connected client identified by [nodeId].
   /// You can supply an optional [code] and [reason] which will be forwarded to
@@ -121,4 +117,6 @@ abstract class CrdtSyncServer {
   /// See https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code for
   /// a list of permissible codes.
   Future<void> disconnect(String nodeId, [int? code, String? reason]);
+
+  Future<void> disconnectAll([int? code, String? reason]);
 }

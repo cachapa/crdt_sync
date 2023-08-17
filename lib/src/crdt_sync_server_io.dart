@@ -5,26 +5,59 @@ import 'package:sql_crdt/sql_crdt.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'crdt_sync.dart';
 import 'crdt_sync_server.dart';
-import 'sql_util.dart';
-import 'sync_socket.dart';
 
-CrdtSyncServer getPlatformCrdtSyncServer(SqlCrdt crdt, bool verbose) =>
-    CrdtSyncServerIo(crdt, verbose: verbose);
+CrdtSyncServer getPlatformCrdtSyncServer(
+  SqlCrdt crdt,
+  ServerHandshakeDataBuilder? handshakeDataBuilder,
+  Map<String, Query>? changesetQueries,
+  RecordValidator? validateRecord,
+  OnConnect? onConnect,
+  OnDisconnect? onDisconnect,
+  OnChangeset? onChangesetReceived,
+  OnChangeset? onChangesetSent,
+  bool verbose,
+) =>
+    CrdtSyncServerIo(
+      crdt,
+      handshakeDataBuilder: handshakeDataBuilder,
+      changesetQueries: changesetQueries,
+      validateRecord: validateRecord,
+      onConnect: onConnect,
+      onDisconnect: onDisconnect,
+      onChangesetReceived: onChangesetReceived,
+      onChangesetSent: onChangesetSent,
+      verbose: verbose,
+    );
 
 class CrdtSyncServerIo implements CrdtSyncServer {
   @override
   final SqlCrdt crdt;
+  final ServerHandshakeDataBuilder? handshakeDataBuilder;
+  final Map<String, Query>? changesetQueries;
+  final RecordValidator? validateRecord;
+  final OnConnect? onConnect;
+  final OnDisconnect? onDisconnect;
+  final OnChangeset? onChangesetReceived;
+  final OnChangeset? onChangesetSent;
   @override
   final bool verbose;
 
-  final _connections = <SyncSocket>{};
+  final _connections = <CrdtSync>{};
 
   @override
   int get clientCount => _connections.length;
 
   CrdtSyncServerIo(
     this.crdt, {
+    this.handshakeDataBuilder,
+    this.changesetQueries,
+    this.validateRecord,
+    this.onConnect,
+    this.onDisconnect,
+    this.onChangesetReceived,
+    this.onChangesetSent,
     this.verbose = false,
   });
 
@@ -32,14 +65,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   Future<void> listen(
     int port, {
     Duration? pingInterval = defaultPingInterval,
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
     OnConnection? onConnecting,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     _log('Listening on localhost:${server.port}');
@@ -48,14 +74,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
       await handleRequest(
         request,
         pingInterval: pingInterval,
-        handshakeDataBuilder: handshakeDataBuilder,
-        changesetQueries: changesetQueries,
-        validateRecord: validateRecord,
         onConnecting: onConnecting,
-        onConnect: onConnect,
-        onDisconnect: onDisconnect,
-        onChangesetReceived: onChangesetReceived,
-        onChangesetSent: onChangesetSent,
       );
     }
   }
@@ -64,14 +83,7 @@ class CrdtSyncServerIo implements CrdtSyncServer {
   Future<void> handleRequest(
     dynamic request, {
     Duration? pingInterval = defaultPingInterval,
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
     OnConnection? onConnecting,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
   }) async {
     assert(request is HttpRequest);
 
@@ -79,121 +91,43 @@ class CrdtSyncServerIo implements CrdtSyncServer {
     final socket =
         IOWebSocketChannel(await WebSocketTransformer.upgrade(request)
           ..pingInterval = pingInterval);
-    await handle(
-      socket,
-      handshakeDataBuilder: handshakeDataBuilder,
-      changesetQueries: changesetQueries,
-      validateRecord: validateRecord,
-      onConnect: onConnect,
-      onChangesetReceived: onChangesetReceived,
-      onChangesetSent: onChangesetSent,
-      onDisconnect: onDisconnect,
-    );
+    handle(socket);
   }
 
   @override
-  Future<void> handle(
-    WebSocketChannel socket, {
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    Map<String, Query>? changesetQueries,
-    RecordValidator? validateRecord,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
-  }) async {
-    StreamSubscription? localSubscription;
-
-    late final SyncSocket syncSocket;
-    syncSocket = SyncSocket(
+  void handle(WebSocketChannel socket) {
+    late final CrdtSync crdtSync;
+    crdtSync = CrdtSync(
       crdt,
       socket,
+      isClient: false,
+      handshakeDataBuilder: (peerId, peerData) =>
+          handshakeDataBuilder?.call(peerId!, peerData),
+      changesetQueries: changesetQueries,
       validateRecord: validateRecord,
-      onConnect: (remoteNodeId, remoteInfo) {
-        _connections.add(syncSocket);
-        onConnect?.call(remoteNodeId, remoteInfo);
+      onConnect: (peerId, remoteInfo) {
+        _connections.add(crdtSync);
+        onConnect?.call(peerId, remoteInfo);
       },
-      onDisconnect: (remoteNodeId, code, reason) {
-        localSubscription?.cancel();
-        _connections.remove(syncSocket);
-        onDisconnect?.call(remoteNodeId, code, reason);
+      onDisconnect: (peerId, code, reason) {
+        _connections.remove(crdtSync);
+        onDisconnect?.call(peerId, code, reason);
       },
       onChangesetReceived: onChangesetReceived,
       onChangesetSent: onChangesetSent,
       verbose: verbose,
     );
-
-    final tableSet = (changesetQueries?.keys ?? await crdt.allTables).toSet();
-
-    try {
-      // A good client always introduces itself first
-      final hs = await syncSocket.awaitHandshake();
-
-      syncSocket.sendHandshake(
-        await crdt.lastModified(onlyNodeId: hs.nodeId),
-        handshakeDataBuilder?.call(hs.nodeId, hs.info),
-      );
-
-      // Monitor for changes and send them immediately
-      localSubscription = crdt.onTablesChanged
-          // Filter out unspecified tables
-          .map((e) =>
-              (hlc: e.hlc, tables: tableSet.intersection(e.tables.toSet())))
-          .where((e) => e.tables.isNotEmpty)
-          .asyncMap((e) =>
-              _getChangeset(changesetQueries, e.tables, e.hlc, hs.nodeId))
-          .listen(syncSocket.sendChangeset);
-
-      // Send changeset since last sync.
-      // This is done after monitoring to prevent losing changes that happen
-      // exactly between both calls.
-      await _getChangeset(
-              changesetQueries, tableSet, hs.lastModified, hs.nodeId, true)
-          .then(syncSocket.sendChangeset);
-    } catch (e) {
-      _log('$e');
-    }
   }
 
   @override
-  Future<void> disconnect(String nodeId, [int? code, String? reason]) async {
-    await Future.wait(_connections
-        .where((e) => e.nodeId == nodeId)
-        .map((e) => e.close(code, reason)));
-  }
+  Future<void> disconnect(String peerId, [int? code, String? reason]) =>
+      Future.wait(_connections
+          .where((e) => e.peerId == peerId)
+          .map((e) => e.close(code, reason)));
 
-  Future<Map<String, List<Map<String, Object?>>>> _getChangeset(
-          Map<String, Query>? changesetQueries,
-          Iterable<String> tables,
-          Hlc hlc,
-          String remoteNodeId,
-          [bool afterHlc = false]) async =>
-      {
-        for (final table in tables)
-          table: await _getTableChangeset(
-              changesetQueries, table, hlc, remoteNodeId, afterHlc),
-      }..removeWhere((_, records) => records.isEmpty);
-
-  Future<List<Map<String, Object?>>> _getTableChangeset(
-    Map<String, Query>? changesetQueries,
-    String table,
-    Hlc hlc,
-    String remoteNodeId,
-    bool afterHlc,
-  ) {
-    final (sql, args) =
-        changesetQueries?[table] ?? ('SELECT * FROM $table', []);
-    return crdt.query(
-      SqlUtil.addChangesetClauses(
-        table,
-        sql,
-        exceptNodeId: remoteNodeId,
-        onHlc: afterHlc ? null : hlc,
-        afterHlc: afterHlc ? hlc : null,
-      ),
-      args,
-    );
-  }
+  @override
+  Future<void> disconnectAll([int? code, String? reason]) =>
+      Future.wait(_connections.map((e) => e.close(code, reason)));
 
   void _log(String msg) {
     if (verbose) print(msg);

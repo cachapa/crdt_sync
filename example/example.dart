@@ -35,22 +35,24 @@ Future<void> main(List<String> args) async {
 
   late String remoteAuthor;
   if (args.isEmpty) {
-    final server = CrdtSyncServer(
+    late final CrdtSyncServer server;
+    server = CrdtSyncServer(
       crdt,
-      // verbose: true,
+      handshakeDataBuilder: (_, __) => {'name': author},
+      onConnect: (peerId, peerData) {
+        remoteAuthor = peerData?['name'];
+        print(
+            'Client joined: $remoteAuthor [${server.clientCount} online]');
+      },
+      onDisconnect: (peerId, code, reason) => print(
+          'Client left: $remoteAuthor [${server.clientCount} online]'),
+      verbose: true,
     );
     // ignore: unawaited_futures
     server.listen(
       8080,
-      handshakeDataBuilder: (_, __) => {'name': author},
       onConnecting: (request) => print(
           'Incoming connection from ${request.connectionInfo?.remoteAddress.address}'),
-      onConnect: (nodeId, info) {
-        remoteAuthor = info?['name'];
-        print('${server.clientCount} Client joined: $remoteAuthor');
-      },
-      onDisconnect: (nodeId, code, reason) => print(
-          '${server.clientCount} Client left: $remoteAuthor [$code] $reason'),
     );
   } else {
     // ignore: unawaited_futures
