@@ -41,11 +41,10 @@ Future<void> main(List<String> args) async {
       handshakeDataBuilder: (_, __) => {'name': author},
       onConnect: (peerId, peerData) {
         remoteAuthor = peerData?['name'];
-        print(
-            'Client joined: $remoteAuthor [${server.clientCount} online]');
+        print('Client joined: $remoteAuthor [${server.clientCount} online]');
       },
-      onDisconnect: (peerId, code, reason) => print(
-          'Client left: $remoteAuthor [${server.clientCount} online]'),
+      onDisconnect: (peerId, code, reason) =>
+          print('Client left: $remoteAuthor [${server.clientCount} online]'),
       verbose: true,
     );
     // ignore: unawaited_futures

@@ -18,6 +18,6 @@ dev_dependencies:
   test: any
 
   # Example
-  sqlite_crdt: #any
-    path: ../sqlite_crdt
+  sqlite_crdt: any
+#    path: ../sqlite_crdt
   uuid: any
