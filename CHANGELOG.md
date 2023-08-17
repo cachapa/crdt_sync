@@ -1,3 +1,7 @@
+## 0.0.4
+
+- Major refactor
+
 ## 0.0.3
 
 - Add remote nodeId to connection callbacks
