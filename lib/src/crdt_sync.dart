@@ -33,7 +33,10 @@ class CrdtSync {
   final bool verbose;
 
   late final SyncSocket _syncSocket;
-  String? peerId;
+  String? _peerId;
+
+  /// Represents the nodeId from the remote peer connected to this socket.
+  String? get peerId => _peerId;
 
   /// Takes an established [WebSocket] connection to start synchronizing the
   /// supplied [crdt] with a remote CrdtSync instance.
@@ -151,7 +154,7 @@ class CrdtSync {
       crdt.nodeId,
       onDisconnect: (code, reason) {
         localSubscription?.cancel();
-        if (peerId != null) onDisconnect?.call(peerId!, code, reason);
+        if (_peerId != null) onDisconnect?.call(_peerId!, code, reason);
       },
       onChangeset: _mergeChangeset,
       verbose: verbose,
@@ -159,8 +162,8 @@ class CrdtSync {
 
     try {
       final handshake = await _performHandshake();
-      peerId = handshake.nodeId;
-      onConnect?.call(peerId!, handshake.data);
+      _peerId = handshake.nodeId;
+      onConnect?.call(_peerId!, handshake.data);
 
       // Monitor for changes and send them immediately
       localSubscription = crdt.onTablesChanged
@@ -213,7 +216,7 @@ class CrdtSync {
   void _sendChangeset(CrdtChangeset changeset) {
     if (changeset.isEmpty) return;
     onChangesetSent?.call(
-        peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
+        _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
     _syncSocket.sendChangeset(changeset);
   }
 
@@ -226,7 +229,7 @@ class CrdtSync {
               .toList()));
     }
     onChangesetReceived?.call(
-        peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
+        _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
     crdt.merge(changeset);
   }
 
@@ -241,7 +244,7 @@ class CrdtSync {
         ? changesetQueries
         : changesetQueries.whereKey((k) => tables.contains(k));
     return buildChangeset(crdt, queries,
-        isClient: isClient, peerId: peerId!, atHlc: atHlc, afterHlc: afterHlc);
+        isClient: isClient, peerId: _peerId!, atHlc: atHlc, afterHlc: afterHlc);
   }
 
   /// Utility method to generate a changeset without a [CrdtSync] instance.
