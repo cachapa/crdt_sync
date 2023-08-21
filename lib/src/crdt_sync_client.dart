@@ -11,16 +11,13 @@ const _maxDelay = 10;
 
 enum SocketState { disconnected, connecting, connected }
 
-typedef ClientHandshakeDataBuilder = Map<String, dynamic>? Function();
-typedef OnConnecting = void Function();
-
 class CrdtSyncClient {
   final SqlCrdt crdt;
   final Uri uri;
   final ClientHandshakeDataBuilder? handshakeDataBuilder;
   final Map<String, Query>? changesetQueries;
   final RecordValidator? validateRecord;
-  final OnConnecting? onConnecting;
+  final void Function()? onConnecting;
   final OnConnect? onConnect;
   final OnDisconnect? onDisconnect;
   final OnChangeset? onChangesetReceived;
@@ -42,36 +39,12 @@ class CrdtSyncClient {
   /// Stream socket state changes.
   Stream<SocketState> get watchState => _stateController.stream;
 
-  /// A client that automatically synchronizes local changes with a remote
-  /// server and vice-versa. It will manage the connection automatically, trying
-  /// to connect or restore the connection until [disconnect] is called.
+  /// A client that automatically manages the connection state of an
+  /// underlying [CrdtSync].
   ///
-  /// Use [handshakeDataBuilder] if you need to send connection metadata on the
-  /// first frame. This can be useful to send client identifiers, or auth
-  /// tokens.
+  /// Use [onConnecting] to monitor the state of outgoing connection attempts.
   ///
-  /// Use [tables] if you want to specify which tables to be synchronized.
-  /// Defaults to all tables in the database. Cannot be empty.
-  ///
-  /// By default, [CrdtSyncClient] monitors [tables] in the supplied [crdt].
-  /// [queryBuilder] can be used if more complex use cases are needed, but be
-  /// sure to use the supplied [lastModified] and [remoteNodeId] parameters to
-  /// avoid generating larger than necessary datasets, or leaking data.
-  /// Return [null] to use the default query for that table.
-  ///
-  /// If implemented, [validateRecord] will be called for each incoming record.
-  /// Returning false will cause that record to not be merged in the local
-  /// database. This can be used for low-trust environments to e.g. avoid
-  /// a user writing into tables it should not have access to.
-  ///
-  /// The [onConnecting], [onConnect] and [onDisconnect] callbacks can be used
-  /// to monitor the connection state. See also [state] and [watchState].
-  ///
-  /// [onChangesetReceived] and [onChangesetSent] can be used to log the
-  /// respective data transfers. This can be useful to identify data handling
-  /// inefficiencies.
-  ///
-  /// Set [verbose] to true to spam your output with raw payloads.
+  /// See [CrdtSync.client] for a description of the remaining parameters.
   CrdtSyncClient(
     this.crdt,
     this.uri, {
@@ -88,7 +61,8 @@ class CrdtSyncClient {
         assert(changesetQueries == null || changesetQueries.isNotEmpty);
 
   /// Start trying to connect to [uri].
-  /// The client will try to connect every 10 seconds until it succeeds.
+  /// The client will continuously try to connect using exponential backoff
+  /// until it succeeds.
   void connect() async {
     if (_state != SocketState.disconnected) return;
     _onlineMode = true;
@@ -100,11 +74,10 @@ class CrdtSyncClient {
     try {
       final socket = WebSocketChannel.connect(uri);
       await socket.ready;
-      _crdtSync = CrdtSync(
+      _crdtSync = CrdtSync.client(
         crdt,
         socket,
-        isClient: true,
-        handshakeDataBuilder: (_, __) => handshakeDataBuilder?.call(),
+        handshakeDataBuilder: handshakeDataBuilder,
         changesetQueries: changesetQueries,
         validateRecord: validateRecord,
         onConnect: (remoteNodeId, remoteInfo) {

@@ -10,9 +10,6 @@ typedef Handshake = ({
   Map<String, dynamic>? data,
 });
 
-typedef HandshakeDataBuilder = Object? Function(
-    String? peerId, Map<String, dynamic>? peerData);
-
 class SyncSocket {
   final WebSocketChannel socket;
   final void Function(int? code, String? reason) onDisconnect;

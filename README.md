@@ -23,14 +23,15 @@ final crdt = await SqliteCrdt.openInMemory(…);
 
 ### Server
 
-Instantiate a `CrdtSyncServer` and start listening for connections:
+Start listening for connections:
 
 ```dart
-final server = CrdtSyncServer(crdt);
-server.listen(8080);
+listen(crdt, 8080);
 ```
 
-Alternatively, `CrdtSyncServer` can adopt a `HttpRequest` or `WebSocket` directly making it easy to integrate with [Shelf](https://pub.dev/packages/shelf) and other server frameworks.
+Alternatively, you can use `upgrade()` to adopt an `HttpRequest`, or `CrdtSync.server()` to manage a `WebSocket` directly making it easy to integrate with [Shelf](https://pub.dev/packages/shelf) and other server frameworks.
+
+See [tudo_server](https://github.com/cachapa/tudo_server) for a real world example.
 
 ### Client
 
@@ -43,7 +44,8 @@ client.connect();
 
 Once `connect()` is called, the client will continuously attempt to establish or resume a connection until it succeeds, or until `disconnect()` is called.
 
-See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution.
+See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution, or See [tudo](https://github.com/cachapa/tudo) for a real world example.
+
 
 ## Features and bugs
 

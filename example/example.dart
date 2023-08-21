@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crdt_sync/crdt_sync.dart';
+import 'package:crdt_sync/crdt_sync_server.dart';
 import 'package:sqlite_crdt/sqlite_crdt.dart';
 import 'package:uuid/uuid.dart';
 
@@ -35,23 +36,20 @@ Future<void> main(List<String> args) async {
 
   late String remoteAuthor;
   if (args.isEmpty) {
-    late final CrdtSyncServer server;
-    server = CrdtSyncServer(
-      crdt,
-      handshakeDataBuilder: (_, __) => {'name': author},
-      onConnect: (peerId, peerData) {
-        remoteAuthor = peerData?['name'];
-        print('Client joined: $remoteAuthor [${server.clientCount} online]');
-      },
-      onDisconnect: (peerId, code, reason) =>
-          print('Client left: $remoteAuthor [${server.clientCount} online]'),
-      verbose: true,
-    );
     // ignore: unawaited_futures
-    server.listen(
+    listen(
+      crdt,
       8080,
+      handshakeDataBuilder: (_, __) => {'name': author},
       onConnecting: (request) => print(
           'Incoming connection from ${request.connectionInfo?.remoteAddress.address}'),
+      onConnect: (crdtSync, peerData) {
+        remoteAuthor = (peerData as Map)['name'];
+        print('Client joined: $remoteAuthor');
+      },
+      onDisconnect: (peerId, code, reason) =>
+          print('Client left: $remoteAuthor'),
+      // verbose: true,
     );
   } else {
     // ignore: unawaited_futures
@@ -61,7 +59,7 @@ Future<void> main(List<String> args) async {
       handshakeDataBuilder: () => {'name': author},
       onConnecting: () => print('Connecting…'),
       onConnect: (nodeId, info) {
-        remoteAuthor = info!['name'];
+        remoteAuthor = (info as Map)['name'];
         print('Connected to $remoteAuthor');
       },
       onDisconnect: (nodeId, code, reason) =>

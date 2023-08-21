@@ -1,3 +1,7 @@
+## 0.0.5
+
+- Simplify API
+
 ## 0.0.4
 
 - Major refactor
