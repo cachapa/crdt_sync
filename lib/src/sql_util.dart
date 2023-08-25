@@ -19,21 +19,29 @@ class SqlUtil {
     Hlc? atHlc,
     Hlc? afterHlc,
   }) {
+    assert(onlyNodeId == null || exceptNodeId == null);
+    assert(atHlc == null || afterHlc == null);
+
     final statement = _parser.parse(sql).rootNode as SelectStatement;
 
-    final nodeIdClause = onlyNodeId != null
-        ? _createClause(table, 'node_id', TokenType.equal, onlyNodeId)
-        : _createClause(
-            table, 'node_id', TokenType.exclamationEqual, exceptNodeId!);
-    final modifiedClause = atHlc != null
-        ? _createClause(table, 'modified', TokenType.equal, atHlc.toString())
-        : _createClause(
-            table, 'modified', TokenType.more, afterHlc!.toString());
-    final clauses = _joinClauses(nodeIdClause, modifiedClause);
+    final clauses = [
+      if (onlyNodeId != null)
+        _createClause(table, 'node_id', TokenType.equal, onlyNodeId),
+      if (exceptNodeId != null)
+        _createClause(
+            table, 'node_id', TokenType.exclamationEqual, exceptNodeId),
+      if (atHlc != null)
+        _createClause(table, 'modified', TokenType.equal, atHlc.toString()),
+      if (afterHlc != null)
+        _createClause(table, 'modified', TokenType.more, afterHlc.toString()),
+      if (statement.where != null) statement.where!,
+    ];
 
-    statement.where = statement.where != null
-        ? _joinClauses(clauses, statement.where!)
-        : clauses;
+    if (clauses.isNotEmpty) {
+      statement.where =
+          clauses.reduce((left, right) => _joinClauses(left, right));
+    }
+
     return statement.toSql();
   }
 
