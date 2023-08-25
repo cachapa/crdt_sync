@@ -253,7 +253,7 @@ class CrdtSync {
     SqlCrdt crdt,
     Map<String, Query> changesetQueries, {
     required bool isClient,
-    required String peerId,
+    String? peerId,
     Hlc? atHlc,
     Hlc? afterHlc,
   }) async =>
@@ -273,10 +273,7 @@ class CrdtSync {
 
   static Future<CrdtTableChangeset> _getTableChangeset(
       SqlCrdt crdt, String table, String sql, List<Object?> args,
-      {required bool isClient,
-      required String peerId,
-      Hlc? atHlc,
-      Hlc? afterHlc}) {
+      {required bool isClient, String? peerId, Hlc? atHlc, Hlc? afterHlc}) {
     assert((atHlc == null) ^ (afterHlc == null));
 
     return crdt.query(

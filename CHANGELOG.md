@@ -1,3 +1,7 @@
+## 0.0.6
+
+- Make `peerId` optional when building changesets
+
 ## 0.0.5
 
 - Simplify API
