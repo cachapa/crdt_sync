@@ -1,3 +1,7 @@
+## 0.0.8
+
+- Optional async `validateRecord` and `handshake` builders
+
 ## 0.0.7
 
 - Fix error building full changesets

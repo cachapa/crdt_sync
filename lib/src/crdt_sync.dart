@@ -8,10 +8,10 @@ import 'sync_socket.dart';
 
 typedef Query = (String sql, List<Object?> args);
 
-typedef ClientHandshakeDataBuilder = Object? Function();
-typedef ServerHandshakeDataBuilder = Object? Function(
+typedef ClientHandshakeDataBuilder = FutureOr<Object>? Function();
+typedef ServerHandshakeDataBuilder = FutureOr<Object>? Function(
     String peerId, Object? peerData);
-typedef RecordValidator = bool Function(
+typedef RecordValidator = FutureOr<bool> Function(
     String table, Map<String, dynamic> record);
 typedef OnChangeset = void Function(
     String nodeId, Map<String, int> recordCounts);
@@ -198,7 +198,7 @@ class CrdtSync {
       _syncSocket.sendHandshake(
         crdt.nodeId,
         await crdt.lastModified(excludeNodeId: crdt.nodeId),
-        clientHandshakeDataBuilder?.call(),
+        await clientHandshakeDataBuilder?.call(),
       );
       return await _syncSocket.receiveHandshake();
     } else {
@@ -207,7 +207,7 @@ class CrdtSync {
       _syncSocket.sendHandshake(
         crdt.nodeId,
         await crdt.lastModified(onlyNodeId: handshake.nodeId),
-        serverHandshakeDataBuilder?.call(handshake.nodeId, handshake.data),
+        await serverHandshakeDataBuilder?.call(handshake.nodeId, handshake.data),
       );
       return handshake;
     }
@@ -220,17 +220,22 @@ class CrdtSync {
     _syncSocket.sendChangeset(changeset);
   }
 
-  void _mergeChangeset(CrdtChangeset changeset) {
+  Future<void> _mergeChangeset(CrdtChangeset changeset) async {
     if (validateRecord != null) {
-      changeset = changeset.map((table, records) => MapEntry(
-          table,
-          records
-              .where((record) => validateRecord!.call(table, record))
-              .toList()));
+      final validatedChangeset = <String, CrdtTableChangeset>{};
+      for (final entry in changeset.entries) {
+        final table = entry.key;
+        final records = (await Future.wait(entry.value
+                .map((e) async => await validateRecord!(table, e) ? e : null)))
+            .nonNulls
+            .toList();
+        if (records.isNotEmpty) validatedChangeset[table] = records;
+      }
+      changeset = validatedChangeset;
     }
     onChangesetReceived?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
-    crdt.merge(changeset);
+    await crdt.merge(changeset);
   }
 
   /// Async method to get a changeset using the provided [changesetQueries].
