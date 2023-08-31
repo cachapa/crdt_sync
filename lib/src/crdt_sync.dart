@@ -207,7 +207,8 @@ class CrdtSync {
       _syncSocket.sendHandshake(
         crdt.nodeId,
         await crdt.lastModified(onlyNodeId: handshake.nodeId),
-        await serverHandshakeDataBuilder?.call(handshake.nodeId, handshake.data),
+        await serverHandshakeDataBuilder?.call(
+            handshake.nodeId, handshake.data),
       );
       return handshake;
     }
