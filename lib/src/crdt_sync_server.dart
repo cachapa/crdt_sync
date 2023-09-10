@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:sql_crdt/sql_crdt.dart';
+import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/io.dart';
 
 import 'crdt_sync.dart';
@@ -23,11 +23,10 @@ typedef ServerOnConnect = void Function(CrdtSync crdtSync, Object? customData);
 ///
 /// See [CrdtSync.server] for a description of the remaining parameters.
 Future<void> listen(
-  SqlCrdt crdt,
+  Crdt crdt,
   int port, {
   Duration? pingInterval = defaultPingInterval,
   ServerHandshakeDataBuilder? handshakeDataBuilder,
-  Map<String, Query>? changesetQueries,
   RecordValidator? validateRecord,
   void Function(HttpRequest request)? onConnecting,
   ServerOnConnect? onConnect,
@@ -46,7 +45,6 @@ Future<void> listen(
       request,
       pingInterval: pingInterval,
       handshakeDataBuilder: handshakeDataBuilder,
-      changesetQueries: changesetQueries,
       validateRecord: validateRecord,
       onConnect: onConnect,
       onDisconnect: onDisconnect,
@@ -58,11 +56,10 @@ Future<void> listen(
 }
 
 Future<void> upgrade(
-  SqlCrdt crdt,
+  Crdt crdt,
   HttpRequest request, {
   Duration? pingInterval = defaultPingInterval,
   ServerHandshakeDataBuilder? handshakeDataBuilder,
-  Map<String, Query>? changesetQueries,
   RecordValidator? validateRecord,
   ServerOnConnect? onConnect,
   OnDisconnect? onDisconnect,
@@ -78,7 +75,6 @@ Future<void> upgrade(
     crdt,
     webSocket,
     handshakeDataBuilder: handshakeDataBuilder,
-    changesetQueries: changesetQueries,
     validateRecord: validateRecord,
     onConnect: (_, customData) => onConnect?.call(crdtSync, customData),
     onDisconnect: onDisconnect,

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:sql_crdt/sql_crdt.dart';
+import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'crdt_sync.dart';
@@ -12,10 +12,9 @@ const _maxDelay = 10;
 enum SocketState { disconnected, connecting, connected }
 
 class CrdtSyncClient {
-  final SqlCrdt crdt;
+  final Crdt crdt;
   final Uri uri;
   final ClientHandshakeDataBuilder? handshakeDataBuilder;
-  final Map<String, Query>? changesetQueries;
   final RecordValidator? validateRecord;
   final void Function()? onConnecting;
   final OnConnect? onConnect;
@@ -49,7 +48,6 @@ class CrdtSyncClient {
     this.crdt,
     this.uri, {
     this.handshakeDataBuilder,
-    this.changesetQueries,
     this.validateRecord,
     this.onConnecting,
     this.onConnect,
@@ -57,8 +55,7 @@ class CrdtSyncClient {
     this.onChangesetReceived,
     this.onChangesetSent,
     this.verbose = false,
-  })  : assert({'ws', 'wss'}.contains(uri.scheme)),
-        assert(changesetQueries == null || changesetQueries.isNotEmpty);
+  }) : assert({'ws', 'wss'}.contains(uri.scheme));
 
   /// Start trying to connect to [uri].
   /// The client will continuously try to connect using exponential backoff
@@ -78,7 +75,6 @@ class CrdtSyncClient {
         crdt,
         socket,
         handshakeDataBuilder: handshakeDataBuilder,
-        changesetQueries: changesetQueries,
         validateRecord: validateRecord,
         onConnect: (remoteNodeId, remoteInfo) {
           _reconnectDelay = _minDelay;

@@ -1,9 +1,8 @@
 import 'dart:async';
 
-import 'package:sql_crdt/sql_crdt.dart';
+import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'sql_util.dart';
 import 'sync_socket.dart';
 
 typedef Query = (String sql, List<Object?> args);
@@ -20,11 +19,10 @@ typedef OnDisconnect = void Function(String peerId, int? code, String? reason);
 
 class CrdtSync {
   final bool isClient;
-  final SqlCrdt crdt;
+  final Crdt crdt;
 
   final ClientHandshakeDataBuilder? clientHandshakeDataBuilder;
   final ServerHandshakeDataBuilder? serverHandshakeDataBuilder;
-  final Map<String, Query> changesetQueries;
   final RecordValidator? validateRecord;
   final OnConnect? onConnect;
   final OnDisconnect? onDisconnect;
@@ -62,7 +60,7 @@ class CrdtSync {
   ///
   /// Set [verbose] to true to spam your output with raw record payloads.
   CrdtSync.client(
-    SqlCrdt crdt,
+    Crdt crdt,
     WebSocketChannel webSocket, {
     ClientHandshakeDataBuilder? handshakeDataBuilder,
     Map<String, Query>? changesetQueries,
@@ -77,7 +75,6 @@ class CrdtSync {
           webSocket,
           isClient: true,
           clientHandshakeDataBuilder: handshakeDataBuilder,
-          changesetQueries: changesetQueries,
           validateRecord: validateRecord,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
@@ -95,7 +92,7 @@ class CrdtSync {
   ///
   /// See [CrdtSync.client] for a description of the remaining parameters.
   CrdtSync.server(
-    SqlCrdt crdt,
+    Crdt crdt,
     WebSocketChannel webSocket, {
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     Map<String, Query>? changesetQueries,
@@ -110,7 +107,6 @@ class CrdtSync {
           webSocket,
           isClient: false,
           serverHandshakeDataBuilder: handshakeDataBuilder,
-          changesetQueries: changesetQueries,
           validateRecord: validateRecord,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
@@ -125,28 +121,18 @@ class CrdtSync {
     required this.isClient,
     this.clientHandshakeDataBuilder,
     this.serverHandshakeDataBuilder,
-    required Map<String, Query>? changesetQueries,
     required this.validateRecord,
     required this.onConnect,
     required this.onDisconnect,
     required this.onChangesetReceived,
     required this.onChangesetSent,
     required this.verbose,
-  })  : changesetQueries = changesetQueries ?? {},
-        assert((isClient && serverHandshakeDataBuilder == null) ||
+  }) : assert((isClient && serverHandshakeDataBuilder == null) ||
             (!isClient && clientHandshakeDataBuilder == null)) {
     _handle(webSocket);
   }
 
   Future<void> _handle(WebSocketChannel webSocket) async {
-    // Initialize default changeset queries if necessary
-    if (changesetQueries.isEmpty) {
-      for (final table in await crdt.allTables) {
-        changesetQueries[table] = ('SELECT * FROM $table', []);
-      }
-    }
-    final tableSet = changesetQueries.keys.toSet();
-
     StreamSubscription? localSubscription;
 
     _syncSocket = SyncSocket(
@@ -167,17 +153,20 @@ class CrdtSync {
 
       // Monitor for changes and send them immediately
       localSubscription = crdt.onTablesChanged
-          // Filter out unspecified tables
-          .map((e) =>
-              (hlc: e.hlc, tables: tableSet.intersection(e.tables.toSet())))
           .where((e) => e.tables.isNotEmpty)
-          .asyncMap((e) => getChangeset(tables: e.tables, atHlc: e.hlc))
+          .asyncMap((e) => crdt.getChangeset(
+                onlyTables: e.tables,
+                onlyNodeId: isClient ? crdt.nodeId : null,
+                exceptNodeId: isClient ? null : _peerId,
+                modifiedOn: e.hlc,
+              ))
           .listen(_sendChangeset);
 
       // Send changeset since last sync.
       // This is done after monitoring to prevent losing changes that happen
       // exactly between both calls.
-      final changeset = await getChangeset(afterHlc: handshake.lastModified);
+      final changeset =
+          await crdt.getChangeset(modifiedAfter: handshake.lastModified);
       _sendChangeset(changeset);
     } catch (e) {
       _log('$e');
@@ -197,7 +186,7 @@ class CrdtSync {
       // Introduce ourselves
       _syncSocket.sendHandshake(
         crdt.nodeId,
-        await crdt.lastModified(excludeNodeId: crdt.nodeId),
+        await crdt.getLastModified(exceptNodeId: crdt.nodeId),
         await clientHandshakeDataBuilder?.call(),
       );
       return await _syncSocket.receiveHandshake();
@@ -206,7 +195,7 @@ class CrdtSync {
       final handshake = await _syncSocket.receiveHandshake();
       _syncSocket.sendHandshake(
         crdt.nodeId,
-        await crdt.lastModified(onlyNodeId: handshake.nodeId),
+        await crdt.getLastModified(onlyNodeId: handshake.nodeId),
         await serverHandshakeDataBuilder?.call(
             handshake.nodeId, handshake.data),
       );
@@ -215,7 +204,6 @@ class CrdtSync {
   }
 
   void _sendChangeset(CrdtChangeset changeset) {
-    if (changeset.isEmpty) return;
     onChangesetSent?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
     _syncSocket.sendChangeset(changeset);
@@ -239,68 +227,7 @@ class CrdtSync {
     await crdt.merge(changeset);
   }
 
-  /// Async method to get a changeset using the provided [changesetQueries].
-  /// Useful to perform synchronization outside of the normal WebSocket
-  /// connection, e.g. using a REST call.
-  ///
-  /// Use [tables] to generate a subset of the entire changeset.
-  Future<CrdtChangeset> getChangeset(
-      {Iterable<String>? tables, Hlc? atHlc, Hlc? afterHlc}) {
-    final queries = tables == null
-        ? changesetQueries
-        : changesetQueries.whereKey((k) => tables.contains(k));
-    return buildChangeset(crdt, queries,
-        isClient: isClient, peerId: _peerId!, atHlc: atHlc, afterHlc: afterHlc);
-  }
-
-  /// Utility method to generate a changeset without a [CrdtSync] instance.
-  /// See [getChangeset].
-  static Future<CrdtChangeset> buildChangeset(
-    SqlCrdt crdt,
-    Map<String, Query> changesetQueries, {
-    required bool isClient,
-    String? peerId,
-    Hlc? atHlc,
-    Hlc? afterHlc,
-  }) async =>
-      {
-        for (final entry in changesetQueries.entries)
-          entry.key: await _getTableChangeset(
-            crdt,
-            entry.key,
-            entry.value.$1,
-            entry.value.$2,
-            isClient: isClient,
-            peerId: peerId,
-            atHlc: atHlc,
-            afterHlc: afterHlc,
-          ),
-      }..removeWhere((_, records) => records.isEmpty);
-
-  static Future<CrdtTableChangeset> _getTableChangeset(
-      SqlCrdt crdt, String table, String sql, List<Object?> args,
-      {required bool isClient, String? peerId, Hlc? atHlc, Hlc? afterHlc}) {
-    assert((atHlc == null) ^ (afterHlc == null));
-
-    return crdt.query(
-      SqlUtil.addChangesetClauses(
-        table,
-        sql,
-        onlyNodeId: isClient ? crdt.nodeId : null,
-        exceptNodeId: isClient ? null : peerId,
-        atHlc: atHlc,
-        afterHlc: afterHlc,
-      ),
-      args,
-    );
-  }
-
   void _log(String msg) {
     if (verbose) print(msg);
   }
-}
-
-extension<K, V> on Map<K, V> {
-  Map<K, V> whereKey(bool Function(K key) test) =>
-      Map.of(this)..removeWhere((key, _) => !test(key));
 }

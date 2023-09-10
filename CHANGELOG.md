@@ -1,3 +1,12 @@
+## 1.0.0
+
+This version replaces the `sql_crdt` dependency with `crdt` thereby making it compatible with all its implementations.
+
+Changes:
+- Removed changeset generation methods since they're now implemented in `crdt`.
+- Removed optional `changesetQueries` since it's now implemented in `sql_crdt`.
+- Removed all SQL-related dependencies.
+
 ## 0.0.8
 
 - Optional async `validateRecord` and `handshake` builders

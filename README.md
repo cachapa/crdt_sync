@@ -1,6 +1,6 @@
 # crdt_sync
 
-A dart-native turnkey solution for painless network synchronization.
+A Dart-native turnkey solution for painless network synchronization.
 
 `crdt_sync` takes care of the network plumbing between your app and backend to build products that are:
 
@@ -9,16 +9,16 @@ A dart-native turnkey solution for painless network synchronization.
 * Efficient: Synchronization relies on delta changesets to optimize the amount of data sent over the wire.
 * Portable: All communication happens over a single standard WebSocket making it compatible with most network configurations.
 
-> ⚠️ This package is still under development and may not be stable. The API may break at any time.
+This library is compatible with the `crdt` package and all of its implementations. It uses a standard communication protocol which abstracts the underlying storage method. This results in the dubious ability to synchronize SQL nodes with No-SQL ones. I don't judge.
+
+See [crdt](https://github.com/cachapa/crdt) for more details and a list of existing implementations.
 
 ## Usage
 
-`crdt_sync` uses [sql_crdt](https://pub.dev/packages/sql_crdt) for data storage, so you'll need to instantiate one of [sqlite_crdt](https://pub.dev/packages/sqlite_crdt) or [postgres_crdt](https://pub.dev/packages/postgres_crdt).
-
-You'll most likely want to store your server data in `PostgresCrdt`, and client data in `SqliteCrdt`, however the following sample code will just use a transient `SqliteCrdt` database for the sake of simplicity:
+You'll most likely want to use a persistent `crdt` store, however the following sample code uses an ephemeral `MapCrdt` for the sake of simplicity:
 
 ```dart
-final crdt = await SqliteCrdt.openInMemory(…);
+final crdt = MapCrdt(['chat']);
 ```
 
 ### Server
@@ -44,8 +44,7 @@ client.connect();
 
 Once `connect()` is called, the client will continuously attempt to establish or resume a connection until it succeeds, or until `disconnect()` is called.
 
-See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution, or See [tudo](https://github.com/cachapa/tudo) for a real world example.
-
+See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution, or [tudo](https://github.com/cachapa/tudo) for a real-world application.
 
 ## Features and bugs
 

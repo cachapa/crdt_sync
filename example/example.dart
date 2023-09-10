@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crdt/map_crdt.dart';
 import 'package:crdt_sync/crdt_sync.dart';
 import 'package:crdt_sync/crdt_sync_server.dart';
-import 'package:sqlite_crdt/sqlite_crdt.dart';
 import 'package:uuid/uuid.dart';
-
-CrdtSyncClient? crdtSyncClient;
 
 /// This example implements a simple CLI chat app.
 ///
@@ -14,19 +12,7 @@ CrdtSyncClient? crdtSyncClient;
 /// A background process will continuously attempt to establish a connection,
 /// and automatically sync all of the outstanding messages when it succeeds.
 Future<void> main(List<String> args) async {
-  final crdt = await SqliteCrdt.openInMemory(
-    version: 1,
-    onCreate: (crdt, version) async {
-      await crdt.execute('''
-        CREATE TABLE chat (
-          id TEXT NOT NULL,
-          author TEXT NOT NULL,
-          message TEXT NOT NULL,
-          PRIMARY KEY (id)
-        )
-      ''');
-    },
-  );
+  final crdt = MapCrdt(['chat']);
 
   print('Welcome to CRDT Chat.');
   stdout.write('Your name: ');
@@ -53,7 +39,7 @@ Future<void> main(List<String> args) async {
     );
   } else {
     // ignore: unawaited_futures
-    crdtSyncClient = CrdtSyncClient(
+    CrdtSyncClient(
       crdt,
       Uri.parse('ws://${args.first}'),
       handshakeDataBuilder: () => {'name': author},
@@ -65,27 +51,20 @@ Future<void> main(List<String> args) async {
       onDisconnect: (nodeId, code, reason) =>
           print('Disconnected from $remoteAuthor ($code $reason)'),
       // verbose: true,
-    )..connect();
+    ).connect();
   }
 
-  var lastModified = '';
-  crdt
-      .watch(
-        'SELECT * FROM chat WHERE modified > ?1 AND node_id != ?2',
-        () => [lastModified, crdt.nodeId],
-      )
-      .where((e) => e.isNotEmpty)
-      .listen(
-    (messages) {
-      lastModified = messages.last['modified'] as String;
-      for (final message in messages) {
-        print('[${message['author']}] ${message['message']}');
+  crdt.onTablesChanged.listen(
+    (e) {
+      final records = crdt.getChangeset(modifiedOn: e.hlc)['chat']!;
+      for (final record in records) {
+        final message = record['value'] as Map<String, dynamic>;
+        print('[${message['author']}] ${message['line']}');
       }
     },
   );
 
   // Can't use stdin.readLineSync() since it blocks the entire application
   stdin.transform(utf8.decoder).transform(const LineSplitter()).listen((line) =>
-      crdt.execute('INSERT INTO chat (id, author, message) VALUES (?1, ?2, ?3)',
-          [Uuid().v4(), author, line]));
+      crdt.put('chat', Uuid().v4(), {'author': author, 'line': line}));
 }

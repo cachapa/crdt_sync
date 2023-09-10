@@ -1,23 +1,17 @@
 name: crdt_sync
 description: A dart-native turnkey solution for painless network synchronization
-version: 0.0.8
+version: 1.0.0
 repository: https://github.com/cachapa/crdt_sync
 
 environment:
   sdk: ^3.0.0
 
 dependencies:
-  source_span: ^1.9.1
-  sql_crdt: ^1.1.1+1
-#    path: ../sql_crdt
-  sqlparser: ^0.30.3
+  crdt: ^5.0.0
+#    path: ../crdt
   web_socket_channel: ^2.4.0
 
 dev_dependencies:
   lints: any
   test: any
-
-  # Example
-  sqlite_crdt: any
-#    path: ../sqlite_crdt
   uuid: any

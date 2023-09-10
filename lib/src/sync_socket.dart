@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:sql_crdt/sql_crdt.dart';
+import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 typedef Handshake = ({
@@ -34,16 +34,23 @@ class SyncSocket {
           // The first message is a handshake
           _handshakeCompleter.complete((
             nodeId: message['node_id'] as String,
+            // Modified timestamps always use the local node id
             lastModified: Hlc.parse(message['last_modified'] as String)
-                // Modified timestamps always use the local node id
                 .apply(nodeId: localNodeId),
             data: message['data'] as Map<String, dynamic>?
           ));
         } else {
           // Merge into crdt
-          final changeset = (message as Map<String, dynamic>).map((table,
-                  records) =>
-              MapEntry(table, (records as List).cast<Map<String, dynamic>>()));
+          final changeset = (message as Map<String, dynamic>)
+              // Cast payload to CrdtChangeset
+              .map((table, records) => MapEntry(
+                  table,
+                  (records as List)
+                      .cast<Map<String, dynamic>>()
+                      // Parse Hlc
+                      .map((e) => e.map((key, value) => MapEntry(
+                          key, key == 'hlc' ? Hlc.parse(value) : value)))
+                      .toList()));
           onChangeset(changeset);
         }
       },
@@ -53,6 +60,7 @@ class SyncSocket {
   }
 
   void _send(Map<String, Object?> data) {
+    if (data.isEmpty) return;
     _log('⬆️ $data');
     socket.sink.add(jsonEncode(data));
   }
