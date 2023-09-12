@@ -41,16 +41,7 @@ class SyncSocket {
           ));
         } else {
           // Merge into crdt
-          final changeset = (message as Map<String, dynamic>)
-              // Cast payload to CrdtChangeset
-              .map((table, records) => MapEntry(
-                  table,
-                  (records as List)
-                      .cast<Map<String, dynamic>>()
-                      // Parse Hlc
-                      .map((e) => e.map((key, value) => MapEntry(
-                          key, key == 'hlc' ? Hlc.parse(value) : value)))
-                      .toList()));
+          final changeset = parseCrdtChangeset(message);
           onChangeset(changeset);
         }
       },

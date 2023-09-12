@@ -1,3 +1,7 @@
+## 1.0.1
+
+- Add optional `changesetBuilder` to allow for custom changeset generation
+
 ## 1.0.0
 
 This version replaces the `sql_crdt` dependency with `crdt` thereby making it compatible with all its implementations.

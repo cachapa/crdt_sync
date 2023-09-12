@@ -60,6 +60,7 @@ Future<void> upgrade(
   HttpRequest request, {
   Duration? pingInterval = defaultPingInterval,
   ServerHandshakeDataBuilder? handshakeDataBuilder,
+  ChangesetBuilder? changesetBuilder,
   RecordValidator? validateRecord,
   ServerOnConnect? onConnect,
   OnDisconnect? onDisconnect,
@@ -75,6 +76,7 @@ Future<void> upgrade(
     crdt,
     webSocket,
     handshakeDataBuilder: handshakeDataBuilder,
+    changesetBuilder: changesetBuilder,
     validateRecord: validateRecord,
     onConnect: (_, customData) => onConnect?.call(crdtSync, customData),
     onDisconnect: onDisconnect,
