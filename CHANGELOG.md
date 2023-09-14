@@ -1,3 +1,7 @@
+## 1.0.2
+
+- Update to latest `crdt` version
+
 ## 1.0.1
 
 - Add optional `changesetBuilder` to allow for custom changeset generation
