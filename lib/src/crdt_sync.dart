@@ -176,8 +176,11 @@ class CrdtSync {
       // Send changeset since last sync.
       // This is done after monitoring to prevent losing changes that happen
       // exactly between both calls.
-      final changeset =
-          await (changesetBuilder(modifiedAfter: handshake.lastModified));
+      final changeset = await (changesetBuilder(
+        onlyNodeId: isClient ? crdt.nodeId : null,
+        exceptNodeId: isClient ? null : _peerId,
+        modifiedAfter: handshake.lastModified,
+      ));
       _sendChangeset(changeset);
     } catch (e) {
       _log('$e');

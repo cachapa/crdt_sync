@@ -1,3 +1,7 @@
+## 1.0.3
+
+- Fix initial sync after handshake
+
 ## 1.0.2
 
 - Update to latest `crdt` version
