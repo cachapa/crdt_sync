@@ -21,6 +21,8 @@ typedef ServerOnConnect = void Function(CrdtSync crdtSync, Object? customData);
 ///
 /// Use [onConnection] to monitor incoming HTTP connections.
 ///
+/// [onUpgradeError] can be used to monitor connection->websocket upgrade errors.
+///
 /// See [CrdtSync.server] for a description of the remaining parameters.
 Future<void> listen(
   Crdt crdt,
@@ -33,6 +35,7 @@ Future<void> listen(
   OnDisconnect? onDisconnect,
   OnChangeset? onChangesetReceived,
   OnChangeset? onChangesetSent,
+  void Function(Object error, HttpRequest request)? onUpgradeError,
   bool verbose = false,
 }) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
@@ -40,18 +43,23 @@ Future<void> listen(
 
   await for (HttpRequest request in server) {
     onConnecting?.call(request);
-    await upgrade(
-      crdt,
-      request,
-      pingInterval: pingInterval,
-      handshakeDataBuilder: handshakeDataBuilder,
-      validateRecord: validateRecord,
-      onConnect: onConnect,
-      onDisconnect: onDisconnect,
-      onChangesetReceived: onChangesetReceived,
-      onChangesetSent: onChangesetSent,
-      verbose: verbose,
-    );
+    try {
+      await upgrade(
+        crdt,
+        request,
+        pingInterval: pingInterval,
+        handshakeDataBuilder: handshakeDataBuilder,
+        validateRecord: validateRecord,
+        onConnect: onConnect,
+        onDisconnect: onDisconnect,
+        onChangesetReceived: onChangesetReceived,
+        onChangesetSent: onChangesetSent,
+        verbose: verbose,
+      );
+    } catch (e) {
+      if (verbose) print(e);
+      onUpgradeError?.call(e, request);
+    }
   }
 }
 

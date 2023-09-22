@@ -1,3 +1,8 @@
+## 1.0.4
+
+- Do not throw exception on socket upgrade errors
+- Added optional `onUpgradeError` to monitor upgrade failures
+
 ## 1.0.3
 
 - Fix initial sync after handshake

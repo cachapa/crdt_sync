@@ -98,6 +98,9 @@ class CrdtSync {
   /// avoid stale connections. This can be done in the parent framework, e.g.
   /// by setting [pingInterval] in shelf_web_socket's [webSocketHandler].
   ///
+  /// Also provided are [listen] and [upgrade] as helper functions to accept new
+  /// connections, and upgrade existing ones, respectively.
+  ///
   /// See [CrdtSync.client] for a description of the remaining parameters.
   CrdtSync.server(
     Crdt crdt,
