@@ -1,3 +1,7 @@
+## 1.0.6
+
+- Fix usage of reserved status code
+
 ## 1.0.5
 
 - Handle abnormal socket closures

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -58,7 +57,7 @@ class SyncSocket {
       socket.sink.add(jsonEncode(data));
     } catch (e, st) {
       _log('$e\n$st');
-      close(WebSocketStatus.abnormalClosure, '$e');
+      close(4000, '$e');
     }
   }
 
