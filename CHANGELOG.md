@@ -1,3 +1,7 @@
+## 1.0.5
+
+- Handle abnormal socket closures
+
 ## 1.0.4
 
 - Do not throw exception on socket upgrade errors

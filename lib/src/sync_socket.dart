@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -53,7 +54,12 @@ class SyncSocket {
   void _send(Map<String, Object?> data) {
     if (data.isEmpty) return;
     _log('⬆️ $data');
-    socket.sink.add(jsonEncode(data));
+    try {
+      socket.sink.add(jsonEncode(data));
+    } catch (e, st) {
+      _log('$e\n$st');
+      close(WebSocketStatus.abnormalClosure, '$e');
+    }
   }
 
   Future<Handshake> receiveHandshake() => _handshakeCompleter.future;
