@@ -1,3 +1,7 @@
+## 1.0. 7
+
+- Catch merge exceptions, e.g. clock drift
+
 ## 1.0.6
 
 - Fix usage of reserved status code

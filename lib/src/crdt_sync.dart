@@ -185,8 +185,8 @@ class CrdtSync {
         modifiedAfter: handshake.lastModified,
       ));
       _sendChangeset(changeset);
-    } catch (e) {
-      _log('$e');
+    } catch (e, st) {
+      _logException(e, st);
     }
   }
 
@@ -228,6 +228,7 @@ class CrdtSync {
   }
 
   Future<void> _mergeChangeset(CrdtChangeset changeset) async {
+    // Filter out records which fail validation
     if (validateRecord != null) {
       final validatedChangeset = <String, CrdtTableChangeset>{};
       for (final entry in changeset.entries) {
@@ -240,12 +241,17 @@ class CrdtSync {
       }
       changeset = validatedChangeset;
     }
+    // Notify and merge
     onChangesetReceived?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
-    await crdt.merge(changeset);
+    try {
+      await crdt.merge(changeset);
+    } catch (e, st) {
+      _logException(e, st);
+    }
   }
 
-  void _log(String msg) {
-    if (verbose) print(msg);
+  void _logException(Object error, StackTrace st) {
+    print(verbose ? '$error\n$st' : '$error');
   }
 }
