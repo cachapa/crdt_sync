@@ -1,5 +1,6 @@
-## 1.0. 7
+## 1.0.7
 
+- Add optional incoming changeset modification callback
 - Catch merge exceptions, e.g. clock drift
 
 ## 1.0.6

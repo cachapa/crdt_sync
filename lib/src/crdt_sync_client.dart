@@ -15,7 +15,9 @@ class CrdtSyncClient {
   final Crdt crdt;
   final Uri uri;
   final ClientHandshakeDataBuilder? handshakeDataBuilder;
+  final ChangesetBuilder? changesetBuilder;
   final RecordValidator? validateRecord;
+  final ChangesetMapper? mapIncomingChangeset;
   final void Function()? onConnecting;
   final OnConnect? onConnect;
   final OnDisconnect? onDisconnect;
@@ -48,7 +50,9 @@ class CrdtSyncClient {
     this.crdt,
     this.uri, {
     this.handshakeDataBuilder,
+    this.changesetBuilder,
     this.validateRecord,
+    this.mapIncomingChangeset,
     this.onConnecting,
     this.onConnect,
     this.onDisconnect,
@@ -75,7 +79,9 @@ class CrdtSyncClient {
         crdt,
         socket,
         handshakeDataBuilder: handshakeDataBuilder,
+        changesetBuilder: changesetBuilder,
         validateRecord: validateRecord,
+        mapIncomingChangeset: mapIncomingChangeset,
         onConnect: (remoteNodeId, remoteInfo) {
           _reconnectDelay = _minDelay;
           _setState(SocketState.connected);

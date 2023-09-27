@@ -14,8 +14,8 @@ typedef ChangesetBuilder = FutureOr<CrdtChangeset> Function(
     String? exceptNodeId,
     Hlc? modifiedOn,
     Hlc? modifiedAfter});
-typedef RecordValidator = FutureOr<bool> Function(
-    String table, Map<String, dynamic> record);
+typedef RecordValidator = FutureOr<bool> Function(String table, CrdtRecord);
+typedef ChangesetMapper = CrdtRecord Function(String table, CrdtRecord record);
 typedef OnChangeset = void Function(
     String nodeId, Map<String, int> recordCounts);
 typedef OnConnect = void Function(String peerId, Object? customData);
@@ -29,6 +29,7 @@ class CrdtSync {
   final ServerHandshakeDataBuilder? serverHandshakeDataBuilder;
   final ChangesetBuilder changesetBuilder;
   final RecordValidator? validateRecord;
+  final ChangesetMapper? mapIncomingChangeset;
   final OnConnect? onConnect;
   final OnDisconnect? onDisconnect;
   final OnChangeset? onChangesetReceived;
@@ -58,6 +59,9 @@ class CrdtSync {
   /// database. This can be used for low-trust environments to e.g. avoid
   /// a user writing into tables it should not have access to.
   ///
+  /// [mapIncomingChangeset] grants the oportunity to intercept and alter
+  /// received changesets. This can be useful for e.g. decrypting incoming data.
+  ///
   /// The [onConnect] and [onDisconnect] callbacks can be used to monitor the
   /// connection state.
   ///
@@ -72,6 +76,7 @@ class CrdtSync {
     ClientHandshakeDataBuilder? handshakeDataBuilder,
     ChangesetBuilder? changesetBuilder,
     RecordValidator? validateRecord,
+    ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
     OnChangeset? onChangesetReceived,
@@ -84,6 +89,7 @@ class CrdtSync {
           clientHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,
           validateRecord: validateRecord,
+          mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
           onChangesetReceived: onChangesetReceived,
@@ -108,6 +114,7 @@ class CrdtSync {
     ServerHandshakeDataBuilder? handshakeDataBuilder,
     ChangesetBuilder? changesetBuilder,
     RecordValidator? validateRecord,
+    ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
     OnChangeset? onChangesetReceived,
@@ -120,6 +127,7 @@ class CrdtSync {
           serverHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,
           validateRecord: validateRecord,
+          mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
           onChangesetReceived: onChangesetReceived,
@@ -135,6 +143,7 @@ class CrdtSync {
     this.serverHandshakeDataBuilder,
     ChangesetBuilder? changesetBuilder,
     required this.validateRecord,
+    required this.mapIncomingChangeset,
     required this.onConnect,
     required this.onDisconnect,
     required this.onChangesetReceived,
@@ -241,6 +250,18 @@ class CrdtSync {
       }
       changeset = validatedChangeset;
     }
+
+    // Allow implementation to intercept and modify records
+    if (mapIncomingChangeset != null) {
+      changeset = changeset.map(
+        (table, records) => MapEntry(
+            table,
+            records
+                .map((record) => mapIncomingChangeset!(table, record))
+                .toList()),
+      );
+    }
+
     // Notify and merge
     onChangesetReceived?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
