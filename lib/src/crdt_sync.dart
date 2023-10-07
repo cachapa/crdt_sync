@@ -231,9 +231,9 @@ class CrdtSync {
 
   void _sendChangeset(CrdtChangeset changeset) {
     if (changeset.recordCount == 0) return;
+    _syncSocket.sendChangeset(changeset);
     onChangesetSent?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
-    _syncSocket.sendChangeset(changeset);
   }
 
   Future<void> _mergeChangeset(CrdtChangeset changeset) async {
