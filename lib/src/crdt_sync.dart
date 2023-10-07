@@ -195,6 +195,8 @@ class CrdtSync {
       ));
       _sendChangeset(changeset);
     } catch (e, st) {
+      await localSubscription?.cancel();
+      await _syncSocket.close();
       _logException(e, st);
     }
   }
