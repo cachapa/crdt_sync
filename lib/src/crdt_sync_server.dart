@@ -67,6 +67,10 @@ Future<void> listen(
   }
 }
 
+/// Upgrades an incoming connection to a WebSocket and synchronizes the provided
+/// [crdt].
+///
+/// See [listen] for the parameter description.
 Future<void> upgrade(
   Crdt crdt,
   HttpRequest request, {
