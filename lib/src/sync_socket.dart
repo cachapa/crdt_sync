@@ -20,6 +20,11 @@ class SyncSocket {
 
   final _handshakeCompleter = Completer<Handshake>();
 
+  /// Begin managing the socket:
+  /// 1. Perform handshake.
+  /// 2. Monitor for incoming changesets.
+  /// 3. Send local changesets on demand.
+  /// 4. Disconnect when done.
   SyncSocket(
     this.socket,
     String localNodeId, {
@@ -61,16 +66,21 @@ class SyncSocket {
     }
   }
 
+  /// Monitor handshake completion. Useful for establishing connections.
   Future<Handshake> receiveHandshake() => _handshakeCompleter.future;
 
+  /// Send local handshake
   void sendHandshake(String nodeId, Hlc lastModified, Object? data) => _send({
         'node_id': nodeId,
         'last_modified': lastModified,
         'data': data,
       });
 
-  void sendChangeset(CrdtChangeset changeset) => _send(changeset);
+  /// Send local changeset
+  void sendChangeset(CrdtChangeset changeset) =>
+      _send(changeset..removeWhere((key, value) => value.isEmpty));
 
+  /// Close this connection
   Future<void> close([int? code, String? reason]) async {
     await Future.wait([
       _subscription.cancel(),

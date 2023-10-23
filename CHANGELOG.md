@@ -1,3 +1,7 @@
+## 1.0.8
+
+- Avoid sending empty tables in changesets
+
 ## 1.0.7
 
 - Add optional incoming changeset modification callback
