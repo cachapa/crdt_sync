@@ -50,6 +50,7 @@ class SyncSocket {
           onChangeset(changeset);
         }
       },
+      cancelOnError: true,
       onError: (e) => _log('$e'),
       onDone: close,
     );

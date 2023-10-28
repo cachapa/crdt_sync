@@ -1,3 +1,7 @@
+## 1.0.9
+
+- Close stream on errors
+
 ## 1.0.8
 
 - Avoid sending empty tables in changesets
