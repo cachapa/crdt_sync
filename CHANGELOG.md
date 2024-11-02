@@ -1,3 +1,7 @@
+## 1.0.10
+
+- Update dependencies
+
 ## 1.0.9
 
 - Close stream on errors
