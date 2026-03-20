@@ -85,9 +85,10 @@ Future<void> upgrade(
   OnChangeset? onChangesetSent,
   bool verbose = false,
 }) async {
-  final webSocket =
-      IOWebSocketChannel(await WebSocketTransformer.upgrade(request)
-        ..pingInterval = pingInterval);
+  final webSocket = IOWebSocketChannel(
+    await WebSocketTransformer.upgrade(request)
+      ..pingInterval = pingInterval,
+  );
   late final CrdtSync crdtSync;
   crdtSync = CrdtSync.server(
     crdt,

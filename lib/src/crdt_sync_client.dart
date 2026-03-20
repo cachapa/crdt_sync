@@ -6,7 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'crdt_sync.dart';
 
-const _minDelay = 2; // In seconds. Minimum is 2 because 1² = 1.
+const _minDelay = 1; // In seconds
 const _maxDelay = 10;
 
 enum SocketState { disconnected, connecting, connected }
@@ -117,8 +117,10 @@ class CrdtSyncClient {
 
   void _maybeReconnect() {
     if (_onlineMode) {
-      _reconnectTimer =
-          Timer(Duration(seconds: _reconnectDelay), () => connect());
+      _reconnectTimer = Timer(
+        Duration(seconds: _reconnectDelay),
+        () => connect(),
+      );
       _log('Reconnecting in ${_reconnectDelay}s…');
       _reconnectDelay = min(_reconnectDelay * 2, _maxDelay);
     }

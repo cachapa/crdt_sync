@@ -6,7 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 typedef Handshake = ({
   String nodeId,
-  Hlc lastModified,
+  int lastModified,
   Map<String, dynamic>? data,
 });
 
@@ -32,28 +32,28 @@ class SyncSocket {
     required this.onChangeset,
     required this.verbose,
   }) {
-    _subscription = socket.stream.map((e) => jsonDecode(e)).listen(
-      (message) async {
-        _log('⬇️ $message');
-        if (!_handshakeCompleter.isCompleted) {
-          // The first message is a handshake
-          _handshakeCompleter.complete((
-            nodeId: message['node_id'] as String,
-            // Modified timestamps always use the local node id
-            lastModified: Hlc.parse(message['last_modified'] as String)
-                .apply(nodeId: localNodeId),
-            data: message['data'] as Map<String, dynamic>?
-          ));
-        } else {
-          // Merge into crdt
-          final changeset = parseCrdtChangeset(message);
-          onChangeset(changeset);
-        }
-      },
-      cancelOnError: true,
-      onError: (e) => _log('$e'),
-      onDone: close,
-    );
+    _subscription = socket.stream
+        .map((e) => jsonDecode(e))
+        .listen(
+          (message) async {
+            _log('⬇️ $message');
+            if (!_handshakeCompleter.isCompleted) {
+              // The first message is a handshake
+              _handshakeCompleter.complete((
+                nodeId: message['node_id'] as String,
+                lastModified: message['last_modified'] as int,
+                data: message['data'] as Map<String, dynamic>?,
+              ));
+            } else {
+              // Merge into crdt
+              final changeset = CrdtChangeset.fromMap(message);
+              onChangeset(changeset);
+            }
+          },
+          cancelOnError: true,
+          onError: (e) => _log('$e'),
+          onDone: close,
+        );
   }
 
   void _send(Map<String, Object?> data) {
@@ -71,15 +71,11 @@ class SyncSocket {
   Future<Handshake> receiveHandshake() => _handshakeCompleter.future;
 
   /// Send local handshake
-  void sendHandshake(String nodeId, Hlc lastModified, Object? data) => _send({
-        'node_id': nodeId,
-        'last_modified': lastModified,
-        'data': data,
-      });
+  void sendHandshake(String nodeId, int lastModified, Object? data) =>
+      _send({'node_id': nodeId, 'last_modified': lastModified, 'data': data});
 
   /// Send local changeset
-  void sendChangeset(CrdtChangeset changeset) =>
-      _send(changeset..removeWhere((key, value) => value.isEmpty));
+  void sendChangeset(CrdtChangeset changeset) => _send(changeset);
 
   /// Close this connection
   Future<void> close([int? code, String? reason]) async {

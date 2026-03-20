@@ -26,9 +26,10 @@ Future<void> main(List<String> args) async {
     listen(
       crdt,
       8080,
-      handshakeDataBuilder: (_, __) => {'name': author},
+      handshakeDataBuilder: (_, _) => {'name': author},
       onConnecting: (request) => print(
-          'Incoming connection from ${request.connectionInfo?.remoteAddress.address}'),
+        'Incoming connection from ${request.connectionInfo?.remoteAddress.address}…',
+      ),
       onConnect: (crdtSync, peerData) {
         remoteAuthor = (peerData as Map)['name'];
         print('Client joined: $remoteAuthor');
@@ -54,17 +55,20 @@ Future<void> main(List<String> args) async {
     ).connect();
   }
 
-  crdt.onTablesChanged.listen(
-    (e) {
-      final records = crdt.getChangeset(modifiedOn: e.hlc)['chat']!;
-      for (final record in records) {
-        final message = record['value'] as Map<String, dynamic>;
-        print('[${message['author']}] ${message['line']}');
-      }
-    },
-  );
+  crdt.onTablesChanged.listen((e) {
+    final records = crdt.getChangeset(modifiedOn: e.timestamp)['chat']!;
+    for (final record in records.where((e) => !e.isDeleted)) {
+      final message = record.data!;
+      print('[${message['author']}] ${message['line']}');
+    }
+  });
 
   // Can't use stdin.readLineSync() since it blocks the entire application
-  stdin.transform(utf8.decoder).transform(const LineSplitter()).listen((line) =>
-      crdt.put('chat', Uuid().v4(), {'author': author, 'line': line}));
+  stdin
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .listen(
+        (line) =>
+            crdt.put('chat', Uuid().v4(), {'author': author, 'line': line}),
+      );
 }
