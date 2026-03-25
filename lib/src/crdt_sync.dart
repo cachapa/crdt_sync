@@ -13,7 +13,7 @@ typedef ServerHandshakeDataBuilder =
     );
 typedef ChangesetBuilder =
     FutureOr<CrdtChangeset> Function({
-      Iterable<String>? onlyTables,
+      Iterable<String>? onlyCollections,
       String? onlyNodeId,
       String? exceptNodeId,
       int? modifiedOn,
@@ -157,17 +157,9 @@ class CrdtSync {
          (isClient && serverHandshakeDataBuilder == null) ||
              (!isClient && clientHandshakeDataBuilder == null),
        ) {
-    this.changesetBuilder = changesetBuilder ?? _defaultChangesetBuilder;
+    this.changesetBuilder = changesetBuilder ?? crdt.getChangeset;
     _handle(webSocket);
   }
-
-  FutureOr<CrdtChangeset> _defaultChangesetBuilder({
-    Iterable<String>? onlyTables,
-    String? onlyNodeId,
-    String? exceptNodeId,
-    int? modifiedOn,
-    int? modifiedAfter,
-  }) => crdt.getChangeset(onlyNodeId: onlyNodeId);
 
   Future<void> _handle(WebSocketChannel webSocket) async {
     StreamSubscription? localSubscription;
@@ -190,10 +182,9 @@ class CrdtSync {
 
       // Monitor for changes and send them immediately
       localSubscription = crdt.onTablesChanged
-          .where((e) => e.tables.isNotEmpty)
           .asyncMap(
             (e) => changesetBuilder(
-              onlyTables: e.tables,
+              onlyCollections: e.tables,
               onlyNodeId: isClient ? crdt.nodeId : null,
               exceptNodeId: isClient ? null : _peerId,
               modifiedOn: e.timestamp,
@@ -209,11 +200,13 @@ class CrdtSync {
         exceptNodeId: isClient ? null : _peerId,
         modifiedAfter: handshake.lastModified,
       ));
+
       _sendChangeset(changeset);
     } catch (e, st) {
       await localSubscription?.cancel();
       await _syncSocket.close();
       _logException(e, st);
+      rethrow;
     }
   }
 

@@ -36,7 +36,7 @@ class SyncSocket {
         .map((e) => jsonDecode(e))
         .listen(
           (message) async {
-            _log('⬇️ $message');
+            _log('↓ $message');
             if (!_handshakeCompleter.isCompleted) {
               // The first message is a handshake
               _handshakeCompleter.complete((
@@ -58,7 +58,7 @@ class SyncSocket {
 
   void _send(Map<String, Object?> data) {
     if (data.isEmpty) return;
-    _log('⬆️ $data');
+    _log('↑ $data');
     try {
       socket.sink.add(jsonEncode(data));
     } catch (e, st) {
